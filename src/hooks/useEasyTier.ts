@@ -7,8 +7,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { callable, addEventListener } from '@decky/api';
 import {
   CombinedStatus,
-  PluginSettings,
-  InstallProgress
+  InstallProgress,
+  UpdateInfo
 } from '../types';
 
 // 本地 API 响应类型（ApiResponse 已从 types.ts 移除）
@@ -24,23 +24,19 @@ interface EasyTierApi {
   installEasyTier: () => Promise<ApiResult>;
   startEasyTier: () => Promise<ApiResult>;
   stopEasyTier: () => Promise<ApiResult>;
-  savePluginSettings: (settings: PluginSettings) => Promise<ApiResult>;
-  loadPluginSettings: () => Promise<ApiResult<PluginSettings>>;
 }
 
 export const useEasyTier = () => {
   // 状态管理
   const [status, setStatus] = useState<CombinedStatus>({
-    overall: 'stopped',
-    plugin_settings: {
-      auto_start: false,
-      auto_restart_core: true
-    }
+    overall: 'stopped'
   });
 
   const [loading, setLoading] = useState<boolean>(false);
+  const [updating, setUpdating] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [installProgress, setInstallProgress] = useState<InstallProgress | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
 
   // API函数定义
   const api: EasyTierApi = {
@@ -76,24 +72,6 @@ export const useEasyTier = () => {
       try {
         await callable('stop_easytier')();
         return { success: true };
-      } catch (e) {
-        return { success: false, error: String(e) };
-      }
-    }, []),
-
-    savePluginSettings: useCallback(async (settings: PluginSettings) => {
-      try {
-        await callable<[PluginSettings], void>('save_plugin_settings')(settings);
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: String(e) };
-      }
-    }, []),
-
-    loadPluginSettings: useCallback(async () => {
-      try {
-        const response = await callable<[], { settings: PluginSettings }>('load_plugin_settings')();
-        return { success: true, data: response.settings };
       } catch (e) {
         return { success: false, error: String(e) };
       }
@@ -169,22 +147,36 @@ export const useEasyTier = () => {
     }
   }, [api, refreshStatus]);
 
-  const savePluginSettings = useCallback(async (settings: Partial<PluginSettings>) => {
+  const checkUpdate = useCallback(async () => {
     try {
-      const newSettings = { ...status.plugin_settings!, ...settings };
-      const result = await api.savePluginSettings(newSettings);
+      const result = await callable<[], UpdateInfo>('check_update')();
+      setUpdateInfo(result);
+      return result;
+    } catch (e) {
+      console.error('[Frontend] checkUpdate error:', e);
+      return null;
+    }
+  }, []);
+
+  const updateEasyTier = useCallback(async () => {
+    setUpdating(true);
+    setError(null);
+    try {
+      setInstallProgress({ percent: 0, message: '正在更新...' });
+      const result = await callable<[], { success: boolean; error?: string }>('update_easytier')();
       if (result.success) {
-        setStatus((prev: CombinedStatus) => ({
-          ...prev,
-          plugin_settings: newSettings
-        }));
+        await refreshStatus();
+        setInstallProgress(null);
+        setUpdateInfo(null);
       } else {
-        setError(result.error || 'Failed to save settings');
+        setError(result.error || 'Update failed');
       }
     } catch (e) {
       setError(String(e));
+    } finally {
+      setUpdating(false);
     }
-  }, [api, status.plugin_settings]);
+  }, [refreshStatus]);
 
   // 事件监听
   useEffect(() => {
@@ -206,26 +198,15 @@ export const useEasyTier = () => {
 
   // 初始化加载
   useEffect(() => {
-    const init = async () => {
-      try {
-        await refreshStatus();
+    refreshStatus();
+  }, [refreshStatus]);
 
-        const settingsResult = await api.loadPluginSettings();
-        if (settingsResult.success && settingsResult.data) {
-          setStatus((prev: CombinedStatus) => ({
-            ...prev,
-            plugin_settings: settingsResult.data
-          }));
-        }
-        return;
-      } catch (e) {
-        setError(String(e));
-        return;
-      }
-    };
-
-    init();
-  }, [api, refreshStatus]);
+  // 启动时检查一次更新（独立effect，不会重复触发）
+  useEffect(() => {
+    callable<[], UpdateInfo>('check_update')().then((result) => {
+      setUpdateInfo(result);
+    }).catch(() => {});
+  }, []);
 
   // 定期刷新状态（当服务运行时）
   useEffect(() => {
@@ -242,14 +223,17 @@ export const useEasyTier = () => {
     // 状态
     status,
     loading,
+    updating,
     error,
     installProgress,
+    updateInfo,
 
     // 操作函数
     refreshStatus,
     installEasyTier,
     startEasyTier,
     stopEasyTier,
-    savePluginSettings
+    checkUpdate,
+    updateEasyTier
   };
 };

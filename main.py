@@ -5,11 +5,8 @@ import decky
 import json
 import urllib.request
 import urllib.error
-import stat
 import socket
-import subprocess
-from typing import Dict, Optional, Tuple
-from pathlib import Path
+from typing import Dict, Optional
 
 # Add py_modules to path for bundled dependencies
 plugin_dir = os.path.dirname(os.path.abspath(__file__))
@@ -17,14 +14,10 @@ py_modules_path = os.path.join(plugin_dir, "py_modules")
 if py_modules_path not in sys.path:
     sys.path.insert(0, py_modules_path)
 
-# EasyTier下载配置
-EASYTIER_VERSION = "2.5.0"
-EASYTIER_RELEASES_URL = f"https://github.com/EasyTier/EasyTier/releases/download/v{EASYTIER_VERSION}"
+# EasyTier配置
+EASYTIER_GITHUB_REPO = "EasyTier/EasyTier"
 EASYTIER_WEB_BINARY = "easytier-web-embed"
 EASYTIER_CORE_BINARY = "easytier-core"
-# Steam Deck uses x86_64 architecture, download the ZIP archive
-EASYTIER_ZIP_NAME = f"easytier-linux-x86_64-v{EASYTIER_VERSION}.zip"
-EASYTIER_ZIP_URL = f"{EASYTIER_RELEASES_URL}/{EASYTIER_ZIP_NAME}"
 
 class DualProcessManager:
     """管理easytier-web和easytier-core两个进程"""
@@ -218,13 +211,12 @@ class EasyTierManager:
 
     def __init__(self):
         self.easytier_path = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "easytier")
-        self.config_path = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "config.json")
-        self.plugin_settings = {
-            "auto_start": False,
-            "auto_restart_core": True
-        }
+        self.version_file = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "easytier", "version.json")
         self.process_manager: Optional[DualProcessManager] = None
         self.ip_address: Optional[str] = None
+        self.installed_version: Optional[str] = None
+        self.latest_version: Optional[str] = None
+        self._latest_version_ts: float = 0
 
     async def init(self):
         """初始化插件"""
@@ -236,20 +228,19 @@ class EasyTierManager:
             decky.logger.error(f"Failed to create directories: {e}")
             raise
 
-        # 加载配置
-        await self.load_plugin_settings()
-
         # 初始化进程管理器
         self.process_manager = DualProcessManager(self.easytier_path)
-        self.process_manager.auto_restart_core = self.plugin_settings.get("auto_restart_core", True)
 
         # 获取IP地址
         self.ip_address = self._get_local_ip()
 
+        # 加载已安装版本
+        self._load_installed_version()
+
         decky.logger.info(f"Plugin initialized. Runtime dir: {decky.DECKY_PLUGIN_RUNTIME_DIR}")
 
     async def install_easytier(self) -> Dict:
-        """下载并安装EasyTier二进制文件（从ZIP解压）"""
+        """下载并安装最新版EasyTier二进制文件"""
         import zipfile
         try:
             decky.logger.info("Starting EasyTier installation...")
@@ -257,17 +248,29 @@ class EasyTierManager:
             # 检查存储空间（至少需要100MB）
             statvfs = os.statvfs(self.easytier_path)
             free_space = statvfs.f_frsize * statvfs.f_bavail
-            if free_space < 100 * 1024 * 1024:  # 100MB
+            if free_space < 100 * 1024 * 1024:
                 return {"success": False, "error": "Insufficient disk space. Need at least 100MB."}
 
+            # 获取最新版本号
+            await decky.emit("install_progress", 5, "正在获取最新版本...")
+            version = await self._fetch_latest_version()
+            if not version:
+                return {"success": False, "error": "无法获取最新版本信息，请检查网络连接"}
+
+            decky.logger.info(f"Latest version: {version}")
+
+            # 构建下载URL
+            zip_name = f"easytier-linux-x86_64-v{version}.zip"
+            zip_url = f"https://github.com/{EASYTIER_GITHUB_REPO}/releases/download/v{version}/{zip_name}"
+
             # 下载ZIP压缩包
-            await decky.emit("install_progress", 20, f"Downloading {EASYTIER_ZIP_NAME}...")
-            zip_path = os.path.join(self.easytier_path, EASYTIER_ZIP_NAME)
-            if not await self._download_file(EASYTIER_ZIP_URL, zip_path):
-                return {"success": False, "error": f"Failed to download {EASYTIER_ZIP_NAME}"}
+            await decky.emit("install_progress", 20, f"正在下载 {zip_name}...")
+            zip_path = os.path.join(self.easytier_path, zip_name)
+            if not await self._download_file(zip_url, zip_path):
+                return {"success": False, "error": f"Failed to download {zip_name}"}
 
             # 解压ZIP文件
-            await decky.emit("install_progress", 60, "Extracting binaries...")
+            await decky.emit("install_progress", 60, "正在解压...")
             try:
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                     zip_ref.extractall(self.easytier_path)
@@ -276,7 +279,6 @@ class EasyTierManager:
                 decky.logger.error(f"Failed to extract ZIP: {e}")
                 return {"success": False, "error": f"Failed to extract ZIP: {e}"}
             finally:
-                # 删除ZIP文件
                 if os.path.exists(zip_path):
                     os.remove(zip_path)
 
@@ -291,7 +293,6 @@ class EasyTierManager:
                     if os.path.isfile(src):
                         shutil.move(src, dst)
                         decky.logger.info(f"Moved {filename}")
-                # 删除空目录
                 os.rmdir(extracted_dir)
 
             # 设置执行权限
@@ -300,18 +301,19 @@ class EasyTierManager:
 
             if os.path.exists(web_path):
                 os.chmod(web_path, 0o755)
-                decky.logger.info(f"Set executable permission for {EASYTIER_WEB_BINARY}")
             else:
                 return {"success": False, "error": f"{EASYTIER_WEB_BINARY} not found in extracted archive"}
 
             if os.path.exists(core_path):
                 os.chmod(core_path, 0o755)
-                decky.logger.info(f"Set executable permission for {EASYTIER_CORE_BINARY}")
             else:
                 return {"success": False, "error": f"{EASYTIER_CORE_BINARY} not found in extracted archive"}
 
-            await decky.emit("install_progress", 100, "Installation complete!")
-            decky.logger.info("EasyTier installation completed successfully")
+            # 保存版本信息
+            self._save_installed_version(version)
+
+            await decky.emit("install_progress", 100, "安装完成!")
+            decky.logger.info(f"EasyTier v{version} installed successfully")
             return {"success": True}
 
         except Exception as e:
@@ -357,6 +359,9 @@ class EasyTierManager:
         if not self.process_manager:
             return {"success": False, "error": "Process manager not initialized"}
 
+        # 启动前刷新IP地址
+        self.ip_address = self._get_local_ip()
+
         # 启动服务，传递IP地址以便api-host使用
         result = await self.process_manager.start_both(self.ip_address)
 
@@ -376,6 +381,9 @@ class EasyTierManager:
 
     async def get_combined_status(self) -> Dict:
         """获取组合状态"""
+        # 每次查询时刷新IP地址
+        self.ip_address = self._get_local_ip()
+
         if not self.process_manager:
             # 检查是否已安装
             web_path = os.path.join(self.easytier_path, EASYTIER_WEB_BINARY)
@@ -384,14 +392,13 @@ class EasyTierManager:
             if not os.path.exists(web_path) or not os.path.exists(core_path):
                 return {
                     "overall": "uninstalled",
-                    "ip": self.ip_address,
-                    "plugin_settings": self.plugin_settings
+                    "ip": self.ip_address
                 }
 
             return {
                 "overall": "stopped",
                 "ip": self.ip_address,
-                "plugin_settings": self.plugin_settings
+                "installed_version": self.installed_version
             }
 
         # 检查二进制文件是否存在（即使process_manager已初始化）
@@ -400,8 +407,7 @@ class EasyTierManager:
         if not os.path.exists(web_path) or not os.path.exists(core_path):
             return {
                 "overall": "uninstalled",
-                "ip": self.ip_address,
-                "plugin_settings": self.plugin_settings
+                "ip": self.ip_address
             }
 
         # 获取进程状态
@@ -424,43 +430,112 @@ class EasyTierManager:
             "web_status": web_status,
             "core_status": core_status,
             "ip": self.ip_address,
-            "plugin_settings": self.plugin_settings
+            "installed_version": self.installed_version
         }
 
 
-    async def save_plugin_settings(self, settings: Dict) -> Dict:
-        """保存插件设置"""
+    async def _fetch_latest_version(self) -> Optional[str]:
+        """通过GitHub releases redirect获取最新版本号（不消耗API配额）"""
+        import time
+
+        # 缓存30分钟，避免频繁请求
+        if (self.latest_version and self._latest_version_ts
+                and time.time() - self._latest_version_ts < 1800):
+            return self.latest_version
+
         try:
-            self.plugin_settings.update(settings)
-            os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
+            import ssl
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
 
-            with open(self.config_path, 'w') as f:
-                json.dump({"plugin_settings": self.plugin_settings}, f, indent=2)
+            # HEAD请求 /releases/latest 会302重定向到 /releases/tag/vX.Y.Z
+            url = f"https://github.com/{EASYTIER_GITHUB_REPO}/releases/latest"
+            req = urllib.request.Request(url, method='HEAD', headers={
+                'User-Agent': 'DeckyEasyTier/1.0'
+            })
 
-            # 更新进程管理器设置
-            if self.process_manager:
-                self.process_manager.auto_restart_core = self.plugin_settings.get("auto_restart_core", True)
+            class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, req, fp, code, msg, headers, newurl):
+                    self.redirect_url = newurl
+                    return None
 
-            decky.logger.info("Plugin settings saved")
-            return {"success": True}
+            handler = NoRedirectHandler()
+            opener = urllib.request.build_opener(
+                handler,
+                urllib.request.HTTPSHandler(context=ssl_context)
+            )
+
+            try:
+                opener.open(req, timeout=10)
+            except urllib.error.HTTPError:
+                pass
+
+            redirect_url = getattr(handler, 'redirect_url', '')
+            if redirect_url and '/tag/' in redirect_url:
+                tag = redirect_url.split('/tag/')[-1]
+                version = tag.lstrip('v')
+                self.latest_version = version
+                self._latest_version_ts = time.time()
+                decky.logger.info(f"Latest EasyTier version: {version}")
+                return version
+
+            decky.logger.warning("Could not parse version from redirect")
+            return self.latest_version
         except Exception as e:
-            decky.logger.error(f"Failed to save settings: {e}")
-            return {"success": False, "error": str(e)}
+            decky.logger.error(f"Failed to fetch latest version: {e}")
+            return self.latest_version
 
-    async def load_plugin_settings(self):
-        """加载插件设置"""
+    def _load_installed_version(self):
+        """从版本文件加载已安装版本，如无则尝试从二进制检测"""
         try:
-            if os.path.exists(self.config_path):
-                with open(self.config_path, 'r') as f:
+            if os.path.exists(self.version_file):
+                with open(self.version_file, 'r') as f:
                     data = json.load(f)
-                    if "plugin_settings" in data:
-                        self.plugin_settings.update(data["plugin_settings"])
-
-            decky.logger.info("Plugin settings loaded")
+                    self.installed_version = data.get("version")
+                    decky.logger.info(f"Installed version: {self.installed_version}")
+                    return
         except Exception as e:
-            decky.logger.warning(f"Failed to load settings, using defaults: {e}")
+            decky.logger.warning(f"Failed to load version file: {e}")
 
+        # 没有版本文件，尝试从二进制检测
+        core_path = os.path.join(self.easytier_path, EASYTIER_CORE_BINARY)
+        if os.path.exists(core_path):
+            try:
+                import subprocess
+                result = subprocess.run(
+                    [core_path, "--version"],
+                    capture_output=True, text=True, timeout=5
+                )
+                # 输出格式通常为 "easytier-core x.y.z" 或 "x.y.z"
+                output = result.stdout.strip()
+                if output:
+                    # 取最后一个空格后的部分作为版本号
+                    version = output.split()[-1].lstrip('v')
+                    self.installed_version = version
+                    self._save_installed_version(version)
+                    decky.logger.info(f"Detected version from binary: {version}")
+            except Exception as e:
+                decky.logger.warning(f"Failed to detect version from binary: {e}")
 
+    def _save_installed_version(self, version: str):
+        """保存已安装版本到文件"""
+        try:
+            with open(self.version_file, 'w') as f:
+                json.dump({"version": version}, f)
+            self.installed_version = version
+            decky.logger.info(f"Saved installed version: {version}")
+        except Exception as e:
+            decky.logger.error(f"Failed to save version file: {e}")
+
+    async def check_update(self) -> Dict:
+        """检查是否有新版本"""
+        latest = await self._fetch_latest_version()
+        return {
+            "installed_version": self.installed_version,
+            "latest_version": latest,
+            "update_available": bool(latest and self.installed_version and latest != self.installed_version)
+        }
 
     def _get_local_ip(self) -> str:
         """智能获取本地IP地址"""
@@ -507,11 +582,6 @@ class Plugin:
         try:
             self.manager = EasyTierManager()
             await self.manager.init()
-
-            # 如果设置了自动启动，则启动服务
-            if self.manager.plugin_settings.get("auto_start", False):
-                decky.logger.info("Auto-start enabled, starting EasyTier services...")
-                asyncio.create_task(self.manager.start_easytier())
         except Exception as e:
             decky.logger.error(f"Failed to initialize plugin: {e}")
             import traceback
@@ -537,8 +607,6 @@ class Plugin:
             import shutil
             if os.path.exists(self.manager.easytier_path):
                 shutil.rmtree(self.manager.easytier_path)
-            if os.path.exists(self.manager.config_path):
-                os.remove(self.manager.config_path)
             decky.logger.info("All plugin files removed")
         except Exception as e:
             decky.logger.error(f"Failed to remove plugin files: {e}")
@@ -579,14 +647,19 @@ class Plugin:
             return await self.manager.stop_easytier()
         return {"success": False, "error": "Manager not initialized"}
 
-    async def save_plugin_settings(self, settings: Dict) -> Dict:
-        """保存插件设置（前端调用）"""
+    async def check_update(self) -> Dict:
+        """检查更新（前端调用）"""
         if self.manager:
-            return await self.manager.save_plugin_settings(settings)
-        return {"success": False, "error": "Manager not initialized"}
+            return await self.manager.check_update()
+        return {"installed_version": None, "latest_version": None, "update_available": False}
 
-    async def load_plugin_settings(self) -> Dict:
-        """加载插件设置（前端调用）"""
+    async def update_easytier(self) -> Dict:
+        """更新EasyTier（前端调用），需先停止服务"""
         if self.manager:
-            return {"success": True, "settings": self.manager.plugin_settings}
+            # 如果服务正在运行，先停止
+            if self.manager.process_manager:
+                status = self.manager.process_manager.get_status()
+                if status["web_status"] == "running" or status["core_status"] == "running":
+                    await self.manager.stop_easytier()
+            return await self.manager.install_easytier()
         return {"success": False, "error": "Manager not initialized"}

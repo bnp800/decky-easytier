@@ -1,7 +1,6 @@
 import { PanelSection, PanelSectionRow, ButtonItem, Spinner } from '@decky/ui';
-import { FaDownload, FaPlay, FaStop, FaNetworkWired } from 'react-icons/fa';
+import { FaDownload, FaPlay, FaStop, FaNetworkWired, FaSyncAlt } from 'react-icons/fa';
 import { DualStatusPanel } from './DualStatusPanel';
-import { PluginSettingsPanel } from './PluginSettingsPanel';
 import { WebConsoleInfo } from './WebConsoleInfo';
 import { ErrorBanner } from './ErrorBanner';
 import { useEasyTier } from '../hooks/useEasyTier';
@@ -10,13 +9,66 @@ export const EasyTierPanel: React.FC = () => {
   const {
     status,
     loading,
+    updating,
     error,
     installProgress,
+    updateInfo,
     installEasyTier,
     startEasyTier,
     stopEasyTier,
-    savePluginSettings
+    updateEasyTier
   } = useEasyTier();
+
+  const noTunTip = (
+    <PanelSectionRow>
+      <div style={{
+        padding: '12px',
+        fontSize: '12px',
+        color: 'var(--text-secondary)',
+        background: 'rgba(255, 165, 0, 0.1)',
+        borderRadius: '4px',
+        lineHeight: '1.5'
+      }}>
+        ⚠️ Steam Deck 不支持 TUN 模式，请在 Web 控制台中为节点开启
+        「无TUN模式 (--no-tun)」，否则会因权限不足导致节点异常。
+      </div>
+    </PanelSectionRow>
+  );
+
+  const versionBar = (
+    <PanelSectionRow>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        fontSize: '12px',
+        color: 'var(--text-secondary)',
+        padding: '4px 0'
+      }}>
+        <span>版本: v{status.installed_version || '未知'}</span>
+        {updateInfo?.update_available && (
+          <span style={{ color: 'var(--text-success)' }}>
+            新版本 v{updateInfo.latest_version} 可用
+          </span>
+        )}
+      </div>
+    </PanelSectionRow>
+  );
+
+  const updateButton = updateInfo?.update_available ? (
+    <PanelSectionRow>
+      <ButtonItem
+        layout="below"
+        onClick={updateEasyTier}
+        disabled={updating}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {updating ? <Spinner /> : <FaSyncAlt />}
+          {updating ? '更新中...' : `更新到 v${updateInfo.latest_version}`}
+        </div>
+      </ButtonItem>
+    </PanelSectionRow>
+  ) : null;
 
   const renderUninstalledState = () => (
     <PanelSection title="EasyTier 未安装">
@@ -27,14 +79,7 @@ export const EasyTierPanel: React.FC = () => {
           </div>
           <h3>欢迎使用 Decky EasyTier</h3>
           <p style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>
-            需要下载两个二进制文件：
-            <br />
-            <code style={{ display: 'block', margin: '8px 0', padding: '8px', background: 'var(--bg-secondary)' }}>
-              • easytier-web - Web管理控制台
-              <br />
-              • easytier-core - VPN节点服务
-            </code>
-            总大小: ~42MB
+            需要下载EasyTier：
           </p>
         </div>
       </PanelSectionRow>
@@ -78,7 +123,7 @@ export const EasyTierPanel: React.FC = () => {
       {error && (
         <PanelSectionRow>
           <ErrorBanner
-            message="安装失败，请检查网络连接后重试。也可以手动下载二进制文件并放置到 ~/.local/share/decky-easytier/easytier/ 目录。"
+            message="安装失败，请检查网络连接后重试。"
             onRetry={installEasyTier}
           />
         </PanelSectionRow>
@@ -88,6 +133,8 @@ export const EasyTierPanel: React.FC = () => {
 
   const renderStoppedState = () => (
     <PanelSection title="EasyTier 服务已停止">
+      {versionBar}
+
       <PanelSectionRow>
         <div style={{ padding: '16px', textAlign: 'center' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>
@@ -99,8 +146,7 @@ export const EasyTierPanel: React.FC = () => {
           </p>
           <div style={{ textAlign: 'left', margin: '16px 0', color: 'var(--text-secondary)' }}>
             1. 启动Web管理控制台<br />
-            2. 启动配置服务器（22020）<br />
-            3. 启动VPN节点服务
+            2. 启动EasyTier节点
           </div>
         </div>
       </PanelSectionRow>
@@ -118,15 +164,9 @@ export const EasyTierPanel: React.FC = () => {
         </ButtonItem>
       </PanelSectionRow>
 
-      <PanelSectionRow>
-        <div style={{ fontSize: '12px', textTransform: 'uppercase', fontWeight: 'bold', marginBottom: '12px' }}>
-          ⚙️ 插件设置：
-        </div>
-        <PluginSettingsPanel
-          settings={status.plugin_settings}
-          onSave={savePluginSettings}
-        />
-      </PanelSectionRow>
+      {updateButton}
+
+      {noTunTip}
 
       {error && (
         <PanelSectionRow>
@@ -138,6 +178,8 @@ export const EasyTierPanel: React.FC = () => {
 
   const renderRunningState = () => (
     <PanelSection title="EasyTier 服务运行中">
+      {versionBar}
+
       <PanelSectionRow>
         <div style={{ color: 'var(--text-success)', textAlign: 'center', padding: '8px' }}>
           <strong>✓ 服务运行正常</strong>
@@ -147,6 +189,8 @@ export const EasyTierPanel: React.FC = () => {
       <DualStatusPanel status={status} />
 
       <WebConsoleInfo ip={status.ip} />
+
+      {noTunTip}
 
       <PanelSectionRow>
         <ButtonItem
@@ -160,6 +204,19 @@ export const EasyTierPanel: React.FC = () => {
           </div>
         </ButtonItem>
       </PanelSectionRow>
+
+      {updateInfo?.update_available && (
+        <PanelSectionRow>
+          <div style={{
+            padding: '8px 12px',
+            fontSize: '12px',
+            color: 'var(--text-success)',
+            textAlign: 'center'
+          }}>
+            新版本 v{updateInfo.latest_version} 可用，请停止服务后更新
+          </div>
+        </PanelSectionRow>
+      )}
 
       {error && (
         <PanelSectionRow>
@@ -175,7 +232,7 @@ export const EasyTierPanel: React.FC = () => {
 
       <PanelSectionRow>
         <div style={{ color: 'var(--text-warning)' }}>
-          警告：Web服务运行中，但VPN节点未连接。
+          警告：Web服务运行中，但EasyTier节点未连接。
         </div>
       </PanelSectionRow>
 

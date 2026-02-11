@@ -2,12 +2,6 @@
  * TypeScript 类型定义 - Decky EasyTier
  */
 
-// 插件设置
-export interface PluginSettings {
-  auto_start: boolean;
-  auto_restart_core: boolean;
-}
-
 // 进程状态
 export type ProcessStatus = 'stopped' | 'running' | 'crashed' | 'error';
 
@@ -20,8 +14,15 @@ export interface CombinedStatus {
   web_status?: ProcessStatus;
   core_status?: ProcessStatus;
   ip?: string;
-  plugin_settings?: PluginSettings;
+  installed_version?: string;
   error?: string;
+}
+
+// 更新检查结果
+export interface UpdateInfo {
+  installed_version?: string;
+  latest_version?: string;
+  update_available: boolean;
 }
 
 // 安装进度

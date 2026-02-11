@@ -1,15 +1,13 @@
 import { definePlugin } from "@decky/api";
 import { FaNetworkWired } from "react-icons/fa";
-import { PanelSection, PanelSectionRow } from "@decky/ui";
+import { PanelSectionRow } from "@decky/ui";
 import { EasyTierPanel } from "./components/EasyTierPanel";
 
 function Content() {
   return (
-    <PanelSection title="EasyTier 管理">
       <PanelSectionRow>
         <EasyTierPanel />
       </PanelSectionRow>
-    </PanelSection>
   );
 }
 
