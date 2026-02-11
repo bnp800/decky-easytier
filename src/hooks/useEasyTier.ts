@@ -59,10 +59,13 @@ export const useEasyTier = () => {
     }, []),
 
     startEasyTier: useCallback(async () => {
+      console.log('[Frontend API] startEasyTier callable called');
       try {
-        await callable('start_easytier')();
-        return { success: true };
+        const result = await callable<[], { success: boolean; error?: string }>('start_easytier')();
+        console.log('[Frontend API] start_easytier callable returned:', result);
+        return result;
       } catch (e) {
+        console.error('[Frontend API] start_easytier callable error:', e);
         return { success: false, error: String(e) };
       }
     }, []),
@@ -130,16 +133,20 @@ export const useEasyTier = () => {
   }, [api, refreshStatus]);
 
   const startEasyTier = useCallback(async () => {
+    console.log('[Frontend] startEasyTier called');
     setLoading(true);
     setError(null);
     try {
+      console.log('[Frontend] Calling api.startEasyTier()...');
       const result = await api.startEasyTier();
+      console.log('[Frontend] api.startEasyTier() returned:', result);
       if (result.success) {
         await refreshStatus();
       } else {
         setError(result.error || 'Failed to start');
       }
     } catch (e) {
+      console.error('[Frontend] startEasyTier error:', e);
       setError(String(e));
     } finally {
       setLoading(false);

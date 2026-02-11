@@ -49,7 +49,7 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
           <PanelSectionRow>
             <div className="qr-image-container" style={{ textAlign: 'center', padding: '16px' }}>
               <img
-                src={`data:image/png;base64,${qrCode}`}
+                src={`data:image/svg+xml;base64,${qrCode}`}
                 alt="QR Code"
                 style={{ maxWidth: '200px', height: 'auto' }}
               />
@@ -106,11 +106,36 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
           </PanelSectionRow>
         </>
       ) : (
-        <PanelSectionRow>
-          <div style={{ textAlign: 'center', padding: '16px', color: 'var(--text-secondary)' }}>
-            二维码生成中...
-          </div>
-        </PanelSectionRow>
+        <>
+          <PanelSectionRow>
+            <div style={{ textAlign: 'center', padding: '16px' }}>
+              <div style={{ marginBottom: '8px', color: 'var(--text-secondary)' }}>
+                二维码功能不可用，请手动访问：
+              </div>
+              <code style={{ display: 'block', padding: '8px', background: 'var(--bg-secondary)', wordBreak: 'break-all' }}>
+                http://{ip}:11211
+              </code>
+            </div>
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <div className="qr-actions" style={{ display: 'flex', gap: '8px' }}>
+              <ButtonItem onClick={handleCopy}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  {copied ? <FaCheck /> : <FaCopy />}
+                  {copied ? '已复制' : '复制地址'}
+                </div>
+              </ButtonItem>
+
+              <ButtonItem onClick={openInBrowser}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FaExternalLinkAlt />
+                  在浏览器打开
+                </div>
+              </ButtonItem>
+            </div>
+          </PanelSectionRow>
+        </>
       )}
     </div>
   );

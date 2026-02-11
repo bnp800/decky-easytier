@@ -23,7 +23,7 @@ export default definePlugin(() => {
     // 标题栏显示
     titleView: (
       <div style={{ fontSize: '24px', fontWeight: 'bold' }}>
-        Decky EasyTier Manager
+        Decky EasyTier
       </div>
     ),
 
