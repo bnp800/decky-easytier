@@ -8,18 +8,24 @@ import { callable, addEventListener } from '@decky/api';
 import {
   CombinedStatus,
   PluginSettings,
-  ApiResponse,
   InstallProgress
 } from '../types';
 
+// 本地 API 响应类型（ApiResponse 已从 types.ts 移除）
+interface ApiResult<T = void> {
+  success: boolean;
+  error?: string;
+  data?: T;
+}
+
 // API函数类型
 interface EasyTierApi {
-  getCombinedStatus: () => Promise<ApiResponse<CombinedStatus>>;
-  installEasyTier: () => Promise<ApiResponse>;
-  startEasyTier: () => Promise<ApiResponse>;
-  stopEasyTier: () => Promise<ApiResponse>;
-  savePluginSettings: (settings: PluginSettings) => Promise<ApiResponse>;
-  loadPluginSettings: () => Promise<ApiResponse<PluginSettings>>;
+  getCombinedStatus: () => Promise<ApiResult<CombinedStatus>>;
+  installEasyTier: () => Promise<ApiResult>;
+  startEasyTier: () => Promise<ApiResult>;
+  stopEasyTier: () => Promise<ApiResult>;
+  savePluginSettings: (settings: PluginSettings) => Promise<ApiResult>;
+  loadPluginSettings: () => Promise<ApiResult<PluginSettings>>;
 }
 
 export const useEasyTier = () => {
@@ -28,7 +34,6 @@ export const useEasyTier = () => {
     overall: 'stopped',
     plugin_settings: {
       auto_start: false,
-      log_level: 'info',
       auto_restart_core: true
     }
   });
@@ -36,7 +41,6 @@ export const useEasyTier = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [installProgress, setInstallProgress] = useState<InstallProgress | null>(null);
-  const [nodeRegistered, setNodeRegistered] = useState<boolean>(false);
 
   // API函数定义
   const api: EasyTierApi = {
@@ -59,10 +63,8 @@ export const useEasyTier = () => {
     }, []),
 
     startEasyTier: useCallback(async () => {
-      console.log('[Frontend API] startEasyTier callable called');
       try {
         const result = await callable<[], { success: boolean; error?: string }>('start_easytier')();
-        console.log('[Frontend API] start_easytier callable returned:', result);
         return result;
       } catch (e) {
         console.error('[Frontend API] start_easytier callable error:', e);
@@ -103,7 +105,7 @@ export const useEasyTier = () => {
     try {
       const result = await api.getCombinedStatus();
       if (result.success && result.data) {
-        setStatus(prev => ({ ...prev, ...result.data }));
+        setStatus((prev: CombinedStatus) => ({ ...prev, ...result.data }));
         setError(null);
       } else {
         setError(result.error || 'Failed to get status');
@@ -133,13 +135,10 @@ export const useEasyTier = () => {
   }, [api, refreshStatus]);
 
   const startEasyTier = useCallback(async () => {
-    console.log('[Frontend] startEasyTier called');
     setLoading(true);
     setError(null);
     try {
-      console.log('[Frontend] Calling api.startEasyTier()...');
       const result = await api.startEasyTier();
-      console.log('[Frontend] api.startEasyTier() returned:', result);
       if (result.success) {
         await refreshStatus();
       } else {
@@ -175,7 +174,7 @@ export const useEasyTier = () => {
       const newSettings = { ...status.plugin_settings!, ...settings };
       const result = await api.savePluginSettings(newSettings);
       if (result.success) {
-        setStatus(prev => ({
+        setStatus((prev: CombinedStatus) => ({
           ...prev,
           plugin_settings: newSettings
         }));
@@ -190,47 +189,38 @@ export const useEasyTier = () => {
   // 事件监听
   useEffect(() => {
     // 监听服务状态更新
-    const unlistenServiceStatus = addEventListener<[CombinedStatus]>('service_status', (newStatus) => {
-      setStatus(prev => ({ ...prev, ...newStatus }));
+    const unlistenServiceStatus = addEventListener<[CombinedStatus]>('service_status', (newStatus: CombinedStatus) => {
+      setStatus((prev: CombinedStatus) => ({ ...prev, ...newStatus }));
     });
 
     // 监听安装进度
-    const unlistenInstallProgress = addEventListener<[InstallProgress]>('install_progress', (progress) => {
+    const unlistenInstallProgress = addEventListener<[InstallProgress]>('install_progress', (progress: InstallProgress) => {
       setInstallProgress(progress);
-    });
-
-    // 监听节点注册状态
-    const unlistenNodeRegistered = addEventListener<[boolean]>('node_registered', (registered) => {
-      setNodeRegistered(registered);
     });
 
     return () => {
       (unlistenServiceStatus as any)();
       (unlistenInstallProgress as any)();
-      (unlistenNodeRegistered as any)();
     };
   }, []);
 
   // 初始化加载
   useEffect(() => {
-    // 加载初始状态
     const init = async () => {
       try {
-        // 获取初始状态
         await refreshStatus();
 
-        // 加载插件设置
         const settingsResult = await api.loadPluginSettings();
         if (settingsResult.success && settingsResult.data) {
-          setStatus(prev => ({
+          setStatus((prev: CombinedStatus) => ({
             ...prev,
             plugin_settings: settingsResult.data
           }));
         }
-        return;  // 修复TypeScript错误：确保所有路径都返回值
+        return;
       } catch (e) {
         setError(String(e));
-        return;  // 修复TypeScript错误：确保所有路径都返回值
+        return;
       }
     };
 
@@ -245,7 +235,7 @@ export const useEasyTier = () => {
       }, 5000);
       return () => clearInterval(interval);
     }
-    return () => {};  // 确保所有路径都返回函数
+    return () => {};
   }, [status.overall, refreshStatus]);
 
   return {
@@ -254,7 +244,6 @@ export const useEasyTier = () => {
     loading,
     error,
     installProgress,
-    nodeRegistered,
 
     // 操作函数
     refreshStatus,

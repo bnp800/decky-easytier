@@ -101,8 +101,7 @@ console.log('\n=== Event System Validation ===');
 
 const events = [
   'service_status',
-  'install_progress',
-  'node_registered'
+  'install_progress'
 ];
 
 events.forEach(event => {
@@ -145,7 +144,7 @@ expectedStates.forEach(state => {
 const requiredComponents = [
   'DualStatusPanel',
   'PluginSettingsPanel',
-  'QRCodeDisplay',
+  'WebConsoleInfo',
   'ErrorBanner'
 ];
 
@@ -172,8 +171,7 @@ if (fs.existsSync('src/types.ts')) {
   const requiredTypes = [
     'CombinedStatus',
     'PluginSettings',
-    'ProcessStatus',
-    'ApiResponse'
+    'ProcessStatus'
   ];
 
   requiredTypes.forEach(type => {
@@ -205,7 +203,7 @@ const expectedStructure = [
   'src/components/EasyTierPanel.tsx',
   'src/components/DualStatusPanel.tsx',
   'src/components/PluginSettingsPanel.tsx',
-  'src/components/QRCodeDisplay.tsx',
+  'src/components/WebConsoleInfo.tsx',
   'main.py',
   'plugin.json',
   'package.json'

@@ -41,28 +41,19 @@ class DualProcessManager:
     async def start_both(self, ip_address: str = "127.0.0.1") -> Dict:
         """按顺序启动两个进程"""
         try:
-            decky.logger.info("[DEBUG] Starting EasyTier Web service...")
-            decky.logger.info(f"[DEBUG] easytier_path: {self.easytier_path}")
-            decky.logger.info(f"[DEBUG] Using IP address for API host: {ip_address}")
-
             # 1. 检查二进制文件是否存在
             web_path = os.path.join(self.easytier_path, EASYTIER_WEB_BINARY)
             core_path = os.path.join(self.easytier_path, EASYTIER_CORE_BINARY)
 
-            decky.logger.info(f"[DEBUG] web_path: {web_path}, exists: {os.path.exists(web_path)}")
-            decky.logger.info(f"[DEBUG] core_path: {core_path}, exists: {os.path.exists(core_path)}")
-
             if not os.path.exists(web_path):
-                decky.logger.error(f"[DEBUG] {EASYTIER_WEB_BINARY} not found at {web_path}")
+                decky.logger.error(f"{EASYTIER_WEB_BINARY} not found at {web_path}")
                 return {"success": False, "error": f"{EASYTIER_WEB_BINARY} not found at {web_path}"}
             if not os.path.exists(core_path):
-                decky.logger.error(f"[DEBUG] {EASYTIER_CORE_BINARY} not found at {core_path}")
+                decky.logger.error(f"{EASYTIER_CORE_BINARY} not found at {core_path}")
                 return {"success": False, "error": f"{EASYTIER_CORE_BINARY} not found at {core_path}"}
 
             # 2. 启动web和配置服务器
-            decky.logger.info(f"[DEBUG] Starting web process: {web_path}")
             api_host = f"http://{ip_address}:11211"
-            decky.logger.info(f"[DEBUG] API host will be: {api_host}")
             try:
                 self.web_process = await asyncio.create_subprocess_exec(
                     web_path,
@@ -75,16 +66,14 @@ class DualProcessManager:
                     cwd=self.easytier_path
                 )
                 self.web_status = "running"
-                decky.logger.info(f"[DEBUG] Web process started with PID: {self.web_process.pid}")
+                decky.logger.info(f"easytier-web started (PID: {self.web_process.pid})")
             except Exception as e:
-                decky.logger.error(f"[DEBUG] Failed to start web process: {e}")
+                decky.logger.error(f"Failed to start web process: {e}")
                 return {"success": False, "error": f"Failed to start web: {e}"}
 
-            decky.logger.info("[DEBUG] Waiting for config server to be ready...")
             await asyncio.sleep(2)  # 等待配置服务器就绪
 
             # 3. 启动core节点
-            decky.logger.info(f"[DEBUG] Starting core process: {core_path}")
             try:
                 self.core_process = await asyncio.create_subprocess_exec(
                     core_path,
@@ -94,23 +83,22 @@ class DualProcessManager:
                     cwd=self.easytier_path
                 )
                 self.core_status = "running"
-                decky.logger.info(f"[DEBUG] Core process started with PID: {self.core_process.pid}")
+                decky.logger.info(f"easytier-core started (PID: {self.core_process.pid})")
             except Exception as e:
-                decky.logger.error(f"[DEBUG] Failed to start core process: {e}")
+                decky.logger.error(f"Failed to start core process: {e}")
                 await self.stop_both()
                 return {"success": False, "error": f"Failed to start core: {e}"}
 
             # 4. 启动监控任务
-            decky.logger.info("[DEBUG] Starting monitor task")
             self.monitor_task = asyncio.create_task(self.monitor_processes())
 
-            decky.logger.info("[DEBUG] EasyTier services started successfully")
+            decky.logger.info("EasyTier services started successfully")
             return {"success": True}
 
         except Exception as e:
-            decky.logger.error(f"[DEBUG] Exception in start_both: {e}")
+            decky.logger.error(f"Failed to start EasyTier services: {e}")
             import traceback
-            decky.logger.error(f"[DEBUG] Traceback: {traceback.format_exc()}")
+            decky.logger.error(traceback.format_exc())
             await self.stop_both()
             return {"success": False, "error": str(e)}
 
@@ -219,7 +207,6 @@ class DualProcessManager:
 
     def get_status(self) -> Dict:
         """获取当前状态"""
-        #decky.logger.info(f"[DEBUG] DualProcessManager.get_status: web={self.web_status}, core={self.core_status}")
         return {
             "web_status": self.web_status,
             "core_status": self.core_status
@@ -234,38 +221,27 @@ class EasyTierManager:
         self.config_path = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "config.json")
         self.plugin_settings = {
             "auto_start": False,
-            "log_level": "info",
             "auto_restart_core": True
         }
         self.process_manager: Optional[DualProcessManager] = None
         self.ip_address: Optional[str] = None
-        self.qr_code: Optional[str] = None
 
     async def init(self):
         """初始化插件"""
-        decky.logger.info("[DEBUG] Initializing Decky EasyTier plugin...")
-        decky.logger.info(f"[DEBUG] easytier_path: {self.easytier_path}")
-        decky.logger.info(f"[DEBUG] config_path: {self.config_path}")
-
         # 创建必要的目录
         try:
             os.makedirs(self.easytier_path, exist_ok=True)
             os.makedirs(decky.DECKY_PLUGIN_LOG_DIR, exist_ok=True)
-            decky.logger.info("[DEBUG] Directories created successfully")
         except Exception as e:
-            decky.logger.error(f"[DEBUG] Failed to create directories: {e}")
+            decky.logger.error(f"Failed to create directories: {e}")
             raise
 
         # 加载配置
-        decky.logger.info("[DEBUG] Loading plugin settings...")
         await self.load_plugin_settings()
-        decky.logger.info(f"[DEBUG] Plugin settings loaded: {self.plugin_settings}")
 
         # 初始化进程管理器
-        decky.logger.info("[DEBUG] Initializing DualProcessManager...")
         self.process_manager = DualProcessManager(self.easytier_path)
         self.process_manager.auto_restart_core = self.plugin_settings.get("auto_restart_core", True)
-        decky.logger.info("[DEBUG] DualProcessManager initialized")
 
         # 获取IP地址
         self.ip_address = self._get_local_ip()
@@ -378,32 +354,16 @@ class EasyTierManager:
 
     async def start_easytier(self) -> Dict:
         """启动EasyTier服务"""
-        decky.logger.info("[DEBUG] start_easytier called")
-
         if not self.process_manager:
-            decky.logger.error("[DEBUG] Process manager not initialized")
             return {"success": False, "error": "Process manager not initialized"}
 
-        # 生成二维码
-        decky.logger.info("[DEBUG] Generating QR code...")
-        try:
-            self.qr_code = await self.generate_qr_code()
-            decky.logger.info(f"[DEBUG] QR code generated: {self.qr_code is not None}")
-        except Exception as e:
-            decky.logger.warning(f"[DEBUG] Failed to generate QR code: {e}")
-            self.qr_code = None
-
         # 启动服务，传递IP地址以便api-host使用
-        decky.logger.info("[DEBUG] Calling process_manager.start_both() with IP: {}".format(self.ip_address))
         result = await self.process_manager.start_both(self.ip_address)
-        decky.logger.info(f"[DEBUG] start_both returned: {result}")
 
         if result["success"]:
-            decky.logger.info("[DEBUG] Services started successfully, starting node registration monitor")
-            # 开始监控节点注册
-            asyncio.create_task(self._monitor_node_registration())
+            decky.logger.info("EasyTier services started successfully")
         else:
-            decky.logger.error(f"[DEBUG] Failed to start services: {result.get('error', 'Unknown error')}")
+            decky.logger.error(f"Failed to start services: {result.get('error', 'Unknown error')}")
 
         return result
 
@@ -416,26 +376,18 @@ class EasyTierManager:
 
     async def get_combined_status(self) -> Dict:
         """获取组合状态"""
-        # decky.logger.debug("[DEBUG] get_combined_status called")
-
         if not self.process_manager:
-            decky.logger.info("[DEBUG] Process manager not initialized, checking installation status")
             # 检查是否已安装
             web_path = os.path.join(self.easytier_path, EASYTIER_WEB_BINARY)
             core_path = os.path.join(self.easytier_path, EASYTIER_CORE_BINARY)
 
-            web_exists = os.path.exists(web_path)
-            core_exists = os.path.exists(core_path)
-            decky.logger.info(f"[DEBUG] web exists: {web_exists}, core exists: {core_exists}")
-
-            if not web_exists or not core_exists:
+            if not os.path.exists(web_path) or not os.path.exists(core_path):
                 return {
                     "overall": "uninstalled",
                     "ip": self.ip_address,
                     "plugin_settings": self.plugin_settings
                 }
 
-            decky.logger.info("[DEBUG] Returning 'stopped' status (process_manager exists but not running)")
             return {
                 "overall": "stopped",
                 "ip": self.ip_address,
@@ -453,11 +405,9 @@ class EasyTierManager:
             }
 
         # 获取进程状态
-        #decky.logger.info("[DEBUG] Getting process status from DualProcessManager")
         process_status = self.process_manager.get_status()
         web_status = process_status["web_status"]
         core_status = process_status["core_status"]
-        #decky.logger.info(f"[DEBUG] Process status: web={web_status}, core={core_status}")
 
         # 计算总体状态
         if web_status == "stopped" and core_status == "stopped":
@@ -469,15 +419,14 @@ class EasyTierManager:
         else:
             overall = "error"
 
-        #decky.logger.info(f"[DEBUG] Returning status: overall={overall}")
         return {
             "overall": overall,
             "web_status": web_status,
             "core_status": core_status,
             "ip": self.ip_address,
-            "qr_code": self.qr_code,
             "plugin_settings": self.plugin_settings
         }
+
 
     async def save_plugin_settings(self, settings: Dict) -> Dict:
         """保存插件设置"""
@@ -511,76 +460,7 @@ class EasyTierManager:
         except Exception as e:
             decky.logger.warning(f"Failed to load settings, using defaults: {e}")
 
-    async def generate_qr_code(self) -> Optional[str]:
-        """生成Web控制台二维码（使用SVG格式，无需PIL依赖）"""
-        try:
-            # 动态导入qrcode，如果不存在则返回None
-            try:
-                import qrcode
-                from qrcode.image.svg import SvgImage
-            except ImportError:
-                decky.logger.warning("qrcode module not available, skipping QR generation")
-                return None
 
-            # 生成二维码
-            url = f"http://{self.ip_address}:11211"
-            qr = qrcode.QRCode(
-                version=1,
-                error_correction=qrcode.constants.ERROR_CORRECT_L,
-                box_size=10,
-                border=4,
-            )
-            qr.add_data(url)
-            qr.make(fit=True)
-
-            # 使用SVG格式，无需PIL依赖
-            img = qr.make_image(image_factory=SvgImage)
-
-            # 转换为base64（SVG是文本格式）
-            import io
-            import base64
-            buffer = io.BytesIO()
-            img.save(buffer)
-            svg_data = buffer.getvalue().decode('utf-8')
-            return base64.b64encode(svg_data.encode('utf-8')).decode()
-
-        except Exception as e:
-            decky.logger.error(f"Failed to generate QR code: {e}")
-            return None
-
-    async def _monitor_node_registration(self):
-        """监控core节点是否成功注册到web"""
-        retry_count = 0
-        max_retries = 10  # 最多等待50秒
-
-        while retry_count < max_retries:
-            try:
-                # 使用同步 urllib 在线程中执行
-                import urllib.request
-                loop = asyncio.get_event_loop()
-                response = await loop.run_in_executor(
-                    None,
-                    lambda: urllib.request.urlopen("http://127.0.0.1:11211/api/nodes", timeout=5)
-                )
-                if response.status == 200:
-                    data = response.read().decode('utf-8')
-                    nodes = json.loads(data)
-                    # 查找deck节点
-                    for node in nodes:
-                        if node.get('username') == 'deck':
-                            # 节点已注册
-                            await decky.emit("node_registered", True)
-                            decky.logger.info("Core node registered to Web console")
-                            return
-            except Exception as e:
-                decky.logger.debug(f"Failed to check node registration: {e}")
-
-            retry_count += 1
-            await asyncio.sleep(5)
-
-        # 超时未注册
-        decky.logger.warning("Core node registration timeout")
-        await decky.emit("node_registered", False)
 
     def _get_local_ip(self) -> str:
         """智能获取本地IP地址"""
@@ -625,22 +505,17 @@ class Plugin:
         decky.logger.info("=== Decky EasyTier Plugin Starting ===")
 
         try:
-            decky.logger.info("[DEBUG] Creating EasyTierManager...")
             self.manager = EasyTierManager()
-            decky.logger.info("[DEBUG] EasyTierManager created, calling init()...")
             await self.manager.init()
-            decky.logger.info("[DEBUG] EasyTierManager init() completed")
 
             # 如果设置了自动启动，则启动服务
             if self.manager.plugin_settings.get("auto_start", False):
-                decky.logger.info("[DEBUG] Auto-start enabled, starting EasyTier services...")
+                decky.logger.info("Auto-start enabled, starting EasyTier services...")
                 asyncio.create_task(self.manager.start_easytier())
-            else:
-                decky.logger.info("[DEBUG] Auto-start disabled")
         except Exception as e:
-            decky.logger.error(f"[DEBUG] Exception in _main: {e}")
+            decky.logger.error(f"Failed to initialize plugin: {e}")
             import traceback
-            decky.logger.error(f"[DEBUG] Traceback: {traceback.format_exc()}")
+            decky.logger.error(traceback.format_exc())
             raise
 
     async def _unload(self):
@@ -670,18 +545,7 @@ class Plugin:
 
     async def _migration(self):
         """数据迁移（如果插件版本变化）"""
-        decky.logger.info("Checking for data migration...")
-
-        # 迁移旧版本的日志和设置
-        decky.migrate_logs(os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "easytier", "plugin.log"))
-        decky.migrate_settings(
-            os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "config.json"),
-            os.path.dirname(decky.DECKY_PLUGIN_SETTINGS_DIR)
-        )
-        decky.migrate_runtime(
-            os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "easytier"),
-            decky.DECKY_PLUGIN_RUNTIME_DIR
-        )
+        pass
 
     # ========== 前端可调用的API ==========
 
@@ -699,18 +563,14 @@ class Plugin:
 
     async def start_easytier(self) -> Dict:
         """启动EasyTier（前端调用）"""
-        decky.logger.info("[DEBUG] Plugin.start_easytier called by frontend")
         if self.manager:
             try:
-                result = await self.manager.start_easytier()
-                decky.logger.info(f"[DEBUG] Plugin.start_easytier returning: {result}")
-                return result
+                return await self.manager.start_easytier()
             except Exception as e:
-                decky.logger.error(f"[DEBUG] Exception in Plugin.start_easytier: {e}")
+                decky.logger.error(f"Failed to start EasyTier: {e}")
                 import traceback
-                decky.logger.error(f"[DEBUG] Traceback: {traceback.format_exc()}")
+                decky.logger.error(traceback.format_exc())
                 return {"success": False, "error": str(e)}
-        decky.logger.error("[DEBUG] Manager not initialized")
         return {"success": False, "error": "Manager not initialized"}
 
     async def stop_easytier(self) -> Dict:

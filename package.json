@@ -1,7 +1,7 @@
 {
   "name": "decky-easytier",
   "version": "1.0.0",
-  "description": "EasyTier VPN manager for Steam Deck - Downloads and manages easytier-web and easytier-core binaries with QR code mobile access",
+  "description": "EasyTier VPN manager for Steam Deck - Downloads and manages easytier-web and easytier-core binaries with Web console access",
   "type": "module",
   "scripts": {
     "build": "rollup -c",
@@ -18,8 +18,7 @@
     "easytier",
     "vpn",
     "steam-deck",
-    "network",
-    "qr-code"
+    "network"
   ],
   "author": "Decky EasyTier Contributors",
   "license": "GPL-3.0",

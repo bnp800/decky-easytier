@@ -83,11 +83,9 @@ class TestEasyTierManager:
         print("✓ EasyTierManager initialization test passed")
 
     @patch('main.EasyTierManager.get_local_ip')
-    @patch('main.EasyTierManager.generate_qr_code')
-    def test_get_combined_status(self, mock_qr, mock_ip):
+    def test_get_combined_status(self, mock_ip):
         """Test combined status reporting"""
         mock_ip.return_value = "192.168.1.100"
-        mock_qr.return_value = "fake_qr_code"
 
         manager = main.EasyTierManager({})
 
@@ -103,7 +101,6 @@ class TestEasyTierManager:
         assert status["web_status"]["running"] is True
         assert status["core_status"]["running"] is True
         assert status["ip"] == "192.168.1.100"
-        assert status["qr_code"] == "fake_qr_code"
         print("✓ Combined status test passed")
 
     def test_get_local_ip(self):

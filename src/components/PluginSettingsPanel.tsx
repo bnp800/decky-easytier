@@ -14,7 +14,6 @@ export const PluginSettingsPanel: React.FC<PluginSettingsPanelProps> = ({
 }) => {
   const [localSettings, setLocalSettings] = useState<PluginSettings>({
     auto_start: false,
-    log_level: 'info',
     auto_restart_core: true,
     ...settings
   });
