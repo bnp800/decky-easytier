@@ -1,11 +1,11 @@
 {
-  "name": "Example Plugin",
-  "author": "John Doe",
-  "flags": ["debug", "_root"],
+  "name": "Decky EasyTier",
+  "author": "Decky EasyTier Contributors",
+  "flags": ["_root"],
   "api_version": 1,
   "publish": {
-    "tags": ["template", "root"],
-    "description": "Decky example plugin.",
-    "image": "https://opengraph.githubassets.com/1/SteamDeckHomebrew/PluginLoader"
+    "tags": ["network", "vpn", "easytier", "steam-deck"],
+    "description": "EasyTier VPN manager for Steam Deck. Downloads and manages easytier-web and easytier-core binaries, provides QR code for mobile access to Web console.",
+    "image": "https://opengraph.githubassets.com/1/EasyTier/EasyTier"
   }
 }

@@ -1,38 +1,49 @@
 {
-  "name": "decky-plugin-template",
-  "version": "0.0.1",
-  "description": "A template to quickly create decky plugins from scratch, based on TypeScript and webpack",
+  "name": "decky-easytier",
+  "version": "1.0.0",
+  "description": "EasyTier VPN manager for Steam Deck - Downloads and manages easytier-web and easytier-core binaries with QR code mobile access",
   "type": "module",
   "scripts": {
     "build": "rollup -c",
     "watch": "rollup -c -w",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "deploy": "pnpm run build && decky plugin install"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/SteamDeckHomebrew/decky-plugin-template.git"
+    "url": "git+https://github.com/yourusername/decky-easytier.git"
   },
   "keywords": [
     "decky",
     "plugin",
-    "plugin-template",
+    "easytier",
+    "vpn",
     "steam-deck",
-    "deck"
+    "network",
+    "qr-code"
   ],
-  "author": "You <you@you.tld>",
-  "license": "BSD-3-Clause",
+  "author": "Decky EasyTier Contributors",
+  "license": "GPL-3.0",
   "bugs": {
-    "url": "https://github.com/SteamDeckHomebrew/decky-plugin-template/issues"
+    "url": "https://github.com/yourusername/decky-easytier/issues"
   },
-  "homepage": "https://github.com/SteamDeckHomebrew/decky-plugin-template#readme",
+  "homepage": "https://github.com/yourusername/decky-easytier#readme",
   "devDependencies": {
     "@decky/rollup": "^1.0.2",
-    "@decky/ui": "^4.11.0",
+    "@decky/ui": "^4.11.1",
+    "@rollup/plugin-commonjs": "^29.0.0",
+    "@rollup/plugin-json": "^6.1.0",
+    "@rollup/plugin-node-resolve": "^16.0.3",
+    "@rollup/plugin-replace": "^6.0.3",
+    "@rollup/plugin-typescript": "^12.3.0",
     "@rollup/rollup-linux-x64-musl": "^4.53.3",
     "@types/react": "19.1.1",
     "@types/react-dom": "19.1.1",
     "@types/webpack": "^5.28.5",
+    "merge-anything": "^6.0.6",
     "rollup": "^4.53.3",
+    "rollup-plugin-delete": "^3.0.2",
+    "rollup-plugin-external-globals": "^0.13.0",
+    "rollup-plugin-import-assets": "^1.1.1",
     "typescript": "^5.6.2"
   },
   "dependencies": {
