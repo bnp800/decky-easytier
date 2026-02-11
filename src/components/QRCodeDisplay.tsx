@@ -44,6 +44,26 @@ export const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
         </div>
       </PanelSectionRow>
 
+      <PanelSectionRow>
+        <div style={{
+          background: 'var(--bg-warning, #3d2b1f)',
+          border: '1px solid var(--border-warning, #ff9800)',
+          borderRadius: '4px',
+          padding: '12px',
+          marginBottom: '8px',
+          fontSize: '13px'
+        }}>
+          <div style={{ color: 'var(--text-warning, #ff9800)', fontWeight: 'bold', marginBottom: '4px' }}>
+            ⚠️ 默认登录凭据
+          </div>
+          <div style={{ color: 'var(--text-secondary)' }}>
+            用户名: <code style={{ color: 'var(--text-primary)' }}>admin</code>
+            <br />
+            密码: <code style={{ color: 'var(--text-primary)' }}>admin</code>
+          </div>
+        </div>
+      </PanelSectionRow>
+
       {qrCode ? (
         <>
           <PanelSectionRow>

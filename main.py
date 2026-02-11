@@ -88,7 +88,7 @@ class DualProcessManager:
             try:
                 self.core_process = await asyncio.create_subprocess_exec(
                     core_path,
-                    "-w", "udp://127.0.0.1:22020/deck",
+                    "-w", "udp://127.0.0.1:22020/admin",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     cwd=self.easytier_path
@@ -198,7 +198,7 @@ class DualProcessManager:
             core_path = os.path.join(self.easytier_path, EASYTIER_CORE_BINARY)
             self.core_process = await asyncio.create_subprocess_exec(
                 core_path,
-                "-w", "udp://127.0.0.1:22020/deck",
+                "-w", "udp://127.0.0.1:22020/admin",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=self.easytier_path
