@@ -45,6 +45,16 @@ class DualProcessManager:
                 decky.logger.error(f"{EASYTIER_CORE_BINARY} not found at {core_path}")
                 return {"success": False, "error": f"{EASYTIER_CORE_BINARY} not found at {core_path}"}
 
+            # 1.5 启用 IP 转发（TUN 模式需要）
+            try:
+                subprocess.run(["sysctl", "-w", "net.ipv4.ip_forward=1"],
+                               capture_output=True, timeout=5)
+                subprocess.run(["sysctl", "-w", "net.ipv6.conf.all.forwarding=1"],
+                               capture_output=True, timeout=5)
+                decky.logger.info("[DEBUG] IP forwarding enabled")
+            except Exception as e:
+                decky.logger.warning(f"[DEBUG] Failed to enable IP forwarding: {e}")
+
             # 2. 启动web和配置服务器
             api_host = f"http://{ip_address}:11211"
             try:
@@ -306,6 +316,18 @@ class EasyTierManager:
 
             if os.path.exists(core_path):
                 os.chmod(core_path, 0o755)
+                # 设置 CAP_NET_ADMIN 和 CAP_NET_RAW 能力，允许创建 TUN 设备
+                try:
+                    proc = subprocess.run(
+                        ["setcap", "cap_net_admin,cap_net_raw+ep", core_path],
+                        capture_output=True, text=True, timeout=10
+                    )
+                    if proc.returncode == 0:
+                        decky.logger.info(f"Set capabilities for {EASYTIER_CORE_BINARY}")
+                    else:
+                        decky.logger.warning(f"Failed to set capabilities: {proc.stderr}")
+                except Exception as cap_err:
+                    decky.logger.warning(f"setcap failed: {cap_err}")
             else:
                 return {"success": False, "error": f"{EASYTIER_CORE_BINARY} not found in extracted archive"}
 

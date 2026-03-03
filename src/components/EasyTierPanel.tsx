@@ -19,22 +19,6 @@ export const EasyTierPanel: React.FC = () => {
     updateEasyTier
   } = useEasyTier();
 
-  const noTunTip = (
-    <PanelSectionRow>
-      <div style={{
-        padding: '12px',
-        fontSize: '12px',
-        color: 'var(--text-secondary)',
-        background: 'rgba(255, 165, 0, 0.1)',
-        borderRadius: '4px',
-        lineHeight: '1.5'
-      }}>
-        ⚠️ Steam Deck 不支持 TUN 模式，请在 Web 控制台中为节点开启
-        「无TUN模式 (--no-tun)」，否则会因权限不足导致节点异常。
-      </div>
-    </PanelSectionRow>
-  );
-
   const versionBar = (
     <PanelSectionRow>
       <div style={{
@@ -166,8 +150,6 @@ export const EasyTierPanel: React.FC = () => {
 
       {updateButton}
 
-      {noTunTip}
-
       {error && (
         <PanelSectionRow>
           <ErrorBanner message={error} onRetry={startEasyTier} />
@@ -189,8 +171,6 @@ export const EasyTierPanel: React.FC = () => {
       <DualStatusPanel status={status} />
 
       <WebConsoleInfo ip={status.ip} />
-
-      {noTunTip}
 
       <PanelSectionRow>
         <ButtonItem
