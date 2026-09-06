@@ -1,7 +1,5 @@
 """Native Decky backend for EasyTier profiles and one managed core process."""
 
-from __future__ import annotations
-
 import asyncio
 import json
 import os

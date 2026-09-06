@@ -1,7 +1,7 @@
 {
   "name": "Decky-EasyTier",
   "author": "Decky EasyTier Contributors",
-  "flags": ["_root"],
+  "flags": ["root"],
   "api_version": 1,
   "publish": {
     "tags": ["network", "vpn", "easytier", "steam-deck"],
