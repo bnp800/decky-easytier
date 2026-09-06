@@ -22,7 +22,7 @@ jobs:
           printf 'Server = https://archive.archlinux.org/repos/%s/$repo/os/$arch\n' "$ARCH_SNAPSHOT" > /etc/pacman.d/mirrorlist
           sed -i 's/^SigLevel.*/SigLevel = Never/' /etc/pacman.conf
           pacman -Syyuu --noconfirm --overwrite '*'
-          pacman -S --noconfirm --needed --overwrite '*' curl tar rustup protobuf clang llvm pkgconf zstd openssl iproute2 python
+          pacman -S --noconfirm --needed --overwrite '*' curl tar rustup protobuf clang llvm mold pkgconf zstd openssl iproute2 python
       - name: Resolve latest stable EasyTier release
         id: version
         shell: bash
