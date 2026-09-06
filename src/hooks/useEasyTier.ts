@@ -1,239 +1,64 @@
-/**
- * useEasyTier - EasyTier状态管理Hook
- * 管理整个插件的状态、API调用和事件监听
- */
+import { useCallback, useEffect, useState } from 'react';
+import { callable } from '@decky/api';
+import { ApiResponse, PluginSettings, PluginState, Profile, RuntimeSnapshot, SaveProfileResult } from '../types';
 
-import { useState, useEffect, useCallback } from 'react';
-import { callable, addEventListener } from '@decky/api';
-import {
-  CombinedStatus,
-  InstallProgress,
-  UpdateInfo
-} from '../types';
-
-// 本地 API 响应类型（ApiResponse 已从 types.ts 移除）
-interface ApiResult<T = void> {
-  success: boolean;
-  error?: string;
-  data?: T;
-}
-
-// API函数类型
-interface EasyTierApi {
-  getCombinedStatus: () => Promise<ApiResult<CombinedStatus>>;
-  installEasyTier: () => Promise<ApiResult>;
-  startEasyTier: () => Promise<ApiResult>;
-  stopEasyTier: () => Promise<ApiResult>;
-}
-
-export const useEasyTier = () => {
-  // 状态管理
-  const [status, setStatus] = useState<CombinedStatus>({
-    overall: 'stopped'
-  });
-
-  const [loading, setLoading] = useState<boolean>(false);
-  const [updating, setUpdating] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [installProgress, setInstallProgress] = useState<InstallProgress | null>(null);
-  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
-
-  // API函数定义
-  const api: EasyTierApi = {
-    getCombinedStatus: useCallback(async () => {
-      try {
-        const response = await callable<[], CombinedStatus>('get_combined_status')();
-        return { success: true, data: response };
-      } catch (e) {
-        return { success: false, error: String(e) };
-      }
-    }, []),
-
-    installEasyTier: useCallback(async () => {
-      try {
-        await callable('install_easytier')();
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: String(e) };
-      }
-    }, []),
-
-    startEasyTier: useCallback(async () => {
-      try {
-        const result = await callable<[], { success: boolean; error?: string }>('start_easytier')();
-        return result;
-      } catch (e) {
-        console.error('[Frontend API] start_easytier callable error:', e);
-        return { success: false, error: String(e) };
-      }
-    }, []),
-
-    stopEasyTier: useCallback(async () => {
-      try {
-        await callable('stop_easytier')();
-        return { success: true };
-      } catch (e) {
-        return { success: false, error: String(e) };
-      }
-    }, [])
-  };
-
-  // 异步操作函数
-  const refreshStatus = useCallback(async () => {
-    try {
-      const result = await api.getCombinedStatus();
-      if (result.success && result.data) {
-        setStatus((prev: CombinedStatus) => ({ ...prev, ...result.data }));
-        setError(null);
-      } else {
-        setError(result.error || 'Failed to get status');
-      }
-    } catch (e) {
-      setError(String(e));
-    }
-  }, [api]);
-
-  const installEasyTier = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setInstallProgress({ percent: 0, message: 'Starting installation...' });
-      const result = await api.installEasyTier();
-      if (result.success) {
-        await refreshStatus();
-        setInstallProgress(null);
-      } else {
-        setError(result.error || 'Installation failed');
-      }
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [api, refreshStatus]);
-
-  const startEasyTier = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await api.startEasyTier();
-      if (result.success) {
-        await refreshStatus();
-      } else {
-        setError(result.error || 'Failed to start');
-      }
-    } catch (e) {
-      console.error('[Frontend] startEasyTier error:', e);
-      setError(String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [api, refreshStatus]);
-
-  const stopEasyTier = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await api.stopEasyTier();
-      if (result.success) {
-        await refreshStatus();
-      } else {
-        setError(result.error || 'Failed to stop');
-      }
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [api, refreshStatus]);
-
-  const checkUpdate = useCallback(async () => {
-    try {
-      const result = await callable<[], UpdateInfo>('check_update')();
-      setUpdateInfo(result);
-      return result;
-    } catch (e) {
-      console.error('[Frontend] checkUpdate error:', e);
-      return null;
-    }
-  }, []);
-
-  const updateEasyTier = useCallback(async () => {
-    setUpdating(true);
-    setError(null);
-    try {
-      setInstallProgress({ percent: 0, message: '正在更新...' });
-      const result = await callable<[], { success: boolean; error?: string }>('update_easytier')();
-      if (result.success) {
-        await refreshStatus();
-        setInstallProgress(null);
-        setUpdateInfo(null);
-      } else {
-        setError(result.error || 'Update failed');
-      }
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setUpdating(false);
-    }
-  }, [refreshStatus]);
-
-  // 事件监听
-  useEffect(() => {
-    // 监听服务状态更新
-    const unlistenServiceStatus = addEventListener<[CombinedStatus]>('service_status', (newStatus: CombinedStatus) => {
-      setStatus((prev: CombinedStatus) => ({ ...prev, ...newStatus }));
-    });
-
-    // 监听安装进度
-    const unlistenInstallProgress = addEventListener<[InstallProgress]>('install_progress', (progress: InstallProgress) => {
-      setInstallProgress(progress);
-    });
-
-    return () => {
-      (unlistenServiceStatus as any)();
-      (unlistenInstallProgress as any)();
-    };
-  }, []);
-
-  // 初始化加载
-  useEffect(() => {
-    refreshStatus();
-  }, [refreshStatus]);
-
-  // 启动时检查一次更新（独立effect，不会重复触发）
-  useEffect(() => {
-    callable<[], UpdateInfo>('check_update')().then((result) => {
-      setUpdateInfo(result);
-    }).catch(() => {});
-  }, []);
-
-  // 定期刷新状态（当服务运行时）
-  useEffect(() => {
-    if (status.overall === 'running') {
-      const interval = setInterval(() => {
-        refreshStatus();
-      }, 5000);
-      return () => clearInterval(interval);
-    }
-    return () => {};
-  }, [status.overall, refreshStatus]);
-
-  return {
-    // 状态
-    status,
-    loading,
-    updating,
-    error,
-    installProgress,
-    updateInfo,
-
-    // 操作函数
-    refreshStatus,
-    installEasyTier,
-    startEasyTier,
-    stopEasyTier,
-    checkUpdate,
-    updateEasyTier
-  };
+const initialState: PluginState = {
+  schema_version: 2, binary_version: 'bundled', settings: { auto_start: false, auto_restart_core: true },
+  profiles: [], selected_profile_id: null,
+  process: { status: 'stopped', profile_id: null, pid: null, restart_attempt: 0, error: null }, restart_required: false,
 };
+
+export function useEasyTier() {
+  const [state, setState] = useState<PluginState>(initialState);
+  const [runtime, setRuntime] = useState<RuntimeSnapshot | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = useCallback(async <T,>(operation: () => Promise<ApiResponse<T>>): Promise<T | undefined> => {
+    setBusy(true); setError(null);
+    try {
+      const response = await operation();
+      if (!response.success) {
+        const message = response.error?.details ? `${response.error.message}\n${response.error.details}` : response.error?.message;
+        setError(message || '操作失败');
+        return undefined;
+      }
+      return response.data;
+    } catch (reason) {
+      setError(String(reason));
+      return undefined;
+    } finally { setBusy(false); }
+  }, []);
+
+  const refresh = useCallback(async () => {
+    const response = await callable<[], ApiResponse<PluginState>>('get_state')();
+    if (response.success && response.data) setState(response.data);
+    else setError(response.error?.message || '无法读取插件状态');
+  }, []);
+
+  const refreshRuntime = useCallback(async () => {
+    const response = await callable<[number], ApiResponse<RuntimeSnapshot>>('get_runtime_snapshot')(100);
+    if (response.success && response.data) setRuntime(response.data);
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    refreshRuntime();
+    const timer = window.setInterval(() => { refresh(); refreshRuntime(); }, 5000);
+    return () => window.clearInterval(timer);
+  }, [refresh, refreshRuntime]);
+
+  const getProfile = (id: string) => run(() => callable<[string], ApiResponse<Profile>>('get_profile')(id));
+  const saveProfile = async (profile: { id?: string; name: string; toml: string }) => {
+    const result = await run(() => callable<[typeof profile], ApiResponse<SaveProfileResult>>('save_profile')(profile));
+    await refresh(); return result;
+  };
+  const deleteProfile = async (id: string) => { const result = await run(() => callable<[string], ApiResponse>('delete_profile')(id)); await refresh(); return result; };
+  const selectProfile = async (id: string) => { const result = await run(() => callable<[string], ApiResponse>('select_profile')(id)); await refresh(); return result; };
+  const startProfile = async (id: string) => { const result = await run(() => callable<[string], ApiResponse>('start_profile')(id)); await refresh(); await refreshRuntime(); return result; };
+  const stop = async () => { const result = await run(() => callable<[], ApiResponse>('stop_easytier')()); await refresh(); return result; };
+  const restart = async () => { const result = await run(() => callable<[], ApiResponse>('restart_easytier')()); await refresh(); return result; };
+  const saveSettings = async (settings: PluginSettings) => { const result = await run(() => callable<[PluginSettings], ApiResponse>('save_settings')(settings)); await refresh(); return result; };
+
+  return { state, runtime, busy, error, setError, refresh, getProfile, saveProfile, deleteProfile, selectProfile, startProfile, stop, restart, saveSettings };
+}

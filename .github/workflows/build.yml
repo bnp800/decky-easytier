@@ -1,0 +1,148 @@
+name: build-native-plugin
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  ARCH_SNAPSHOT: 2025/07/01
+
+jobs:
+  easytier:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Pin SteamOS-compatible Arch userspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'Server = https://archive.archlinux.org/repos/%s/$repo/os/$arch\n' "$ARCH_SNAPSHOT" > /etc/pacman.d/mirrorlist
+          sed -i 's/^SigLevel.*/SigLevel = Never/' /etc/pacman.conf
+          pacman -Syyuu --noconfirm --overwrite '*'
+          pacman -S --noconfirm --needed --overwrite '*' curl tar rustup protobuf clang llvm pkgconf zstd openssl iproute2 python
+      - name: Resolve latest stable EasyTier release
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_json="$(curl -fsSL https://api.github.com/repos/EasyTier/EasyTier/releases/latest)"
+          version="$(python -c 'import json,sys; print(json.load(sys.stdin)["tag_name"].removeprefix("v"))' <<<"$release_json")"
+          test -n "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "EASYTIER_VERSION=$version" >> "$GITHUB_ENV"
+      - name: Fetch and verify EasyTier source
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL "https://github.com/EasyTier/EasyTier/archive/refs/tags/v${EASYTIER_VERSION}.tar.gz" -o easytier.tar.gz
+          sha256sum easytier.tar.gz | tee easytier-source.sha256
+          tar -xf easytier.tar.gz
+      - name: Install source-declared Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          toolchain="$(sed -n 's/^channel = "\([^"]*\)"/\1/p' "EasyTier-${EASYTIER_VERSION}/rust-toolchain.toml")"
+          test -n "$toolchain"
+          rustup set profile minimal
+          rustup toolchain install "$toolchain" --no-self-update
+          rustup default "$toolchain"
+      - name: Build core and CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "EasyTier-${EASYTIER_VERSION}"
+          export LIBCLANG_PATH="$(llvm-config --libdir)"
+          export ZSTD_SYS_USE_PKG_CONFIG=1
+          export CFLAGS="${CFLAGS:-}" CXXFLAGS="${CXXFLAGS:-}" LDFLAGS="${LDFLAGS:-}"
+          export CFLAGS="${CFLAGS//-flto=auto/}"
+          export CXXFLAGS="${CXXFLAGS//-flto=auto/}"
+          export LDFLAGS="${LDFLAGS//-flto=auto/}"
+          export LDFLAGS="${LDFLAGS//-fuse-ld=lld/}"
+          cargo build --release --locked -p easytier --bin easytier-core --bin easytier-cli
+      - name: Check GLIBC requirements
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import re, subprocess
+          for name in ("easytier-core", "easytier-cli"):
+              import os
+              path = f"EasyTier-{os.environ['EASYTIER_VERSION']}/target/release/{name}"
+              text = subprocess.check_output(["objdump", "-T", path], text=True)
+              versions = {(int(a), int(b)) for a, b in re.findall(r"GLIBC_(\d+)\.(\d+)", text)}
+              if versions and max(versions) > (2, 41):
+                  raise SystemExit(f"{name} requires GLIBC_{max(versions)}, above SteamOS 2.41")
+          PY
+      - name: Run two-node smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="EasyTier-${EASYTIER_VERSION}/target/release"
+          host_ip="$(ip -4 -o addr show scope global | awk '{print $4}' | cut -d/ -f1 | head -n1)"
+          test -n "$host_ip"
+          "$bin/easytier-core" --no-tun --hostname node-one --network-name decky-ci --network-secret ci-secret -i 10.144.144.1 --rpc-portal 127.0.0.1:15888 --stun-servers '' >node1.log 2>&1 & p1=$!
+          "$bin/easytier-core" --no-tun --no-listener --hostname node-two --network-name decky-ci --network-secret ci-secret -i 10.144.144.2 -p "tcp://${host_ip}:11010" --rpc-portal 127.0.0.1:15889 --stun-servers '' >node2.log 2>&1 & p2=$!
+          trap 'kill "$p1" "$p2" 2>/dev/null || true' EXIT
+          found=0
+          for _ in $(seq 1 45); do
+            "$bin/easytier-cli" -p 127.0.0.1:15888 -o json peer >peer.json 2>/dev/null || true
+            if python -c "import json,sys; rows=json.load(open(sys.argv[1])); sys.exit(0 if any(row.get('ipv4') == '10.144.144.2' for row in rows) else 1)" peer.json 2>/dev/null; then found=1; break; fi
+            sleep 1
+          done
+          if [ "$found" != 1 ]; then tail -n 80 node1.log; tail -n 80 node2.log; exit 1; fi
+      - name: Stage binaries
+        run: |
+          mkdir -p easytier-bundle/bin easytier-bundle/licenses
+          cp "EasyTier-${EASYTIER_VERSION}/target/release/easytier-core" easytier-bundle/bin/
+          cp "EasyTier-${EASYTIER_VERSION}/target/release/easytier-cli" easytier-bundle/bin/
+          cp "EasyTier-${EASYTIER_VERSION}/LICENSE" easytier-bundle/licenses/EasyTier-LICENSE
+          cp easytier-source.sha256 easytier-bundle/
+          printf '%s\n' "$EASYTIER_VERSION" > easytier-bundle/VERSION
+      - uses: actions/upload-artifact@v4
+        with:
+          name: easytier-steamos-${{ steps.version.outputs.version }}
+          path: easytier-bundle
+
+  plugin:
+    needs: easytier
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9.15.4 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: python -m unittest -v test_backend.py
+      - uses: actions/download-artifact@v4
+        with:
+          name: easytier-steamos-${{ needs.easytier.outputs.version }}
+          path: bundle
+      - name: Assemble sideload ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="staging/decky-easytier"
+          mkdir -p "$root/bin" "$root/licenses"
+          cp main.py package.json plugin.json README.md LICENSE "$root/"
+          cp -r dist assets "$root/"
+          cp bundle/bin/easytier-core bundle/bin/easytier-cli "$root/bin/"
+          cp bundle/VERSION bundle/easytier-source.sha256 "$root/bin/"
+          cp bundle/licenses/EasyTier-LICENSE "$root/licenses/"
+          chmod 755 "$root/bin/easytier-core" "$root/bin/easytier-cli"
+          (cd staging && python -m zipfile -c ../decky-easytier-v2.0.0.zip decky-easytier)
+          python - <<'PY'
+          import zipfile
+          with zipfile.ZipFile("decky-easytier-v2.0.0.zip") as archive:
+              names = set(archive.namelist())
+              for required in ("decky-easytier/main.py", "decky-easytier/dist/index.js", "decky-easytier/bin/easytier-core", "decky-easytier/bin/easytier-cli"):
+                  assert required in names, required
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: decky-easytier-v2.0.0
+          path: decky-easytier-v2.0.0.zip

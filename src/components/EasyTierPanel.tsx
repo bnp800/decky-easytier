@@ -1,279 +1,97 @@
-import { PanelSection, PanelSectionRow, ButtonItem, Spinner } from '@decky/ui';
-import { FaDownload, FaPlay, FaStop, FaNetworkWired, FaSyncAlt } from 'react-icons/fa';
-import { DualStatusPanel } from './DualStatusPanel';
-import { WebConsoleInfo } from './WebConsoleInfo';
-import { ErrorBanner } from './ErrorBanner';
+import { useState } from 'react';
+import { ButtonItem, ConfirmModal, Field, PanelSection, PanelSectionRow, Spinner, ToggleField, showModal } from '@decky/ui';
+import { FaCopy, FaEdit, FaPlay, FaPlus, FaStop, FaTrash } from 'react-icons/fa';
+import { defaultProfileToml } from '../profileToml';
+import { Profile, ProfileSummary } from '../types';
 import { useEasyTier } from '../hooks/useEasyTier';
+import { ProfileEditor } from './ProfileEditor';
 
-export const EasyTierPanel: React.FC = () => {
-  const {
-    status,
-    loading,
-    updating,
-    error,
-    installProgress,
-    updateInfo,
-    installEasyTier,
-    startEasyTier,
-    stopEasyTier,
-    updateEasyTier
-  } = useEasyTier();
-
-  const versionBar = (
-    <PanelSectionRow>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        fontSize: '12px',
-        color: 'var(--text-secondary)',
-        padding: '4px 0'
-      }}>
-        <span>版本: v{status.installed_version || '未知'}</span>
-        {updateInfo?.update_available && (
-          <span style={{ color: 'var(--text-success)' }}>
-            新版本 v{updateInfo.latest_version} 可用
-          </span>
-        )}
-      </div>
-    </PanelSectionRow>
-  );
-
-  const updateButton = updateInfo?.update_available ? (
-    <PanelSectionRow>
-      <ButtonItem
-        layout="below"
-        onClick={updateEasyTier}
-        disabled={updating}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {updating ? <Spinner /> : <FaSyncAlt />}
-          {updating ? '更新中...' : `更新到 v${updateInfo.latest_version}`}
-        </div>
-      </ButtonItem>
-    </PanelSectionRow>
-  ) : null;
-
-  const renderUninstalledState = () => (
-    <PanelSection title="EasyTier 未安装">
-      <PanelSectionRow>
-        <div style={{ padding: '16px', textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>
-            <FaDownload />
-          </div>
-          <h3>欢迎使用 Decky EasyTier</h3>
-          <p style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>
-            需要下载EasyTier：
-          </p>
-        </div>
-      </PanelSectionRow>
-
-      <PanelSectionRow>
-        <ButtonItem
-          layout="below"
-          onClick={installEasyTier}
-          disabled={loading}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {loading ? <Spinner /> : <FaDownload />}
-            {loading ? '安装中...' : '安装 EasyTier'}
-          </div>
-        </ButtonItem>
-      </PanelSectionRow>
-
-      {installProgress && (
-        <PanelSectionRow>
-          <div style={{ padding: '16px' }}>
-            <div style={{ marginBottom: '8px' }}>
-              {installProgress.message}
-            </div>
-            <div style={{
-              background: 'var(--bg-secondary)',
-              borderRadius: '4px',
-              height: '8px',
-              overflow: 'hidden'
-            }}>
-              <div style={{
-                background: 'var(--text-success)',
-                width: `${installProgress.percent}%`,
-                height: '100%',
-                transition: 'width 0.3s'
-              }} />
-            </div>
-          </div>
-        </PanelSectionRow>
-      )}
-
-      {error && (
-        <PanelSectionRow>
-          <ErrorBanner
-            message="安装失败，请检查网络连接后重试。"
-            onRetry={installEasyTier}
-          />
-        </PanelSectionRow>
-      )}
-    </PanelSection>
-  );
-
-  const renderStoppedState = () => (
-    <PanelSection title="EasyTier 服务已停止">
-      {versionBar}
-
-      <PanelSectionRow>
-        <div style={{ padding: '16px', textAlign: 'center' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>
-            <FaNetworkWired />
-          </div>
-          <h3>服务已停止</h3>
-          <p style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>
-            点击启动后将自动完成：
-          </p>
-          <div style={{ textAlign: 'left', margin: '16px 0', color: 'var(--text-secondary)' }}>
-            1. 启动Web管理控制台<br />
-            2. 启动EasyTier节点
-          </div>
-        </div>
-      </PanelSectionRow>
-
-      <PanelSectionRow>
-        <ButtonItem
-          layout="below"
-          onClick={startEasyTier}
-          disabled={loading}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {loading ? <Spinner /> : <FaPlay />}
-            {loading ? '启动中...' : '启动 EasyTier'}
-          </div>
-        </ButtonItem>
-      </PanelSectionRow>
-
-      {updateButton}
-
-      {error && (
-        <PanelSectionRow>
-          <ErrorBanner message={error} onRetry={startEasyTier} />
-        </PanelSectionRow>
-      )}
-    </PanelSection>
-  );
-
-  const renderRunningState = () => (
-    <PanelSection title="EasyTier 服务运行中">
-      {versionBar}
-
-      <PanelSectionRow>
-        <div style={{ color: 'var(--text-success)', textAlign: 'center', padding: '8px' }}>
-          <strong>✓ 服务运行正常</strong>
-        </div>
-      </PanelSectionRow>
-
-      <DualStatusPanel status={status} />
-
-      <WebConsoleInfo ip={status.ip} />
-
-      <PanelSectionRow>
-        <ButtonItem
-          layout="below"
-          onClick={stopEasyTier}
-          disabled={loading}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {loading ? <Spinner /> : <FaStop />}
-            {loading ? '停止中...' : '停止 EasyTier'}
-          </div>
-        </ButtonItem>
-      </PanelSectionRow>
-
-      {updateInfo?.update_available && (
-        <PanelSectionRow>
-          <div style={{
-            padding: '8px 12px',
-            fontSize: '12px',
-            color: 'var(--text-success)',
-            textAlign: 'center'
-          }}>
-            新版本 v{updateInfo.latest_version} 可用，请停止服务后更新
-          </div>
-        </PanelSectionRow>
-      )}
-
-      {error && (
-        <PanelSectionRow>
-          <ErrorBanner message={error} />
-        </PanelSectionRow>
-      )}
-    </PanelSection>
-  );
-
-  const renderPartialState = () => (
-    <PanelSection title="⚠️ 服务部分运行">
-      <DualStatusPanel status={status} />
-
-      <PanelSectionRow>
-        <div style={{ color: 'var(--text-warning)' }}>
-          警告：Web服务运行中，但EasyTier节点未连接。
-        </div>
-      </PanelSectionRow>
-
-      <PanelSectionRow>
-        <ButtonItem
-          layout="below"
-          onClick={stopEasyTier}
-          disabled={loading}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {loading ? <Spinner /> : <FaStop />}
-            停止服务并重新启动
-          </div>
-        </ButtonItem>
-      </PanelSectionRow>
-    </PanelSection>
-  );
-
-  const renderErrorState = () => (
-    <PanelSection title="❌ 服务运行错误">
-      <PanelSectionRow>
-        <ErrorBanner message={status.error || 'Unknown error occurred'} />
-      </PanelSectionRow>
-
-      <DualStatusPanel status={status} />
-
-      <PanelSectionRow>
-        <ButtonItem
-          layout="below"
-          onClick={stopEasyTier}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <FaStop />
-            停止服务
-          </div>
-        </ButtonItem>
-      </PanelSectionRow>
-    </PanelSection>
-  );
-
-  switch (status.overall) {
-    case 'uninstalled':
-      return renderUninstalledState();
-    case 'stopped':
-      return renderStoppedState();
-    case 'running':
-      return renderRunningState();
-    case 'partial':
-      return renderPartialState();
-    case 'error':
-      return renderErrorState();
-    default:
-      return (
-        <PanelSection>
-          <PanelSectionRow>
-            <div style={{ textAlign: 'center', padding: '16px' }}>
-              <Spinner />
-              <p>正在加载...</p>
-            </div>
-          </PanelSectionRow>
-        </PanelSection>
-      );
-  }
+const LABELS: Record<string, string> = {
+  stopped: '已停止', starting: '启动中', running: '运行中', stopping: '停止中',
+  restart_wait: '等待自动重启', crashed: '已崩溃', error: '错误',
 };
+
+const JsonView = ({ value, empty }: { value: unknown; empty: string }) => {
+  const items = Array.isArray(value) ? value : value ? [value] : [];
+  if (!items.length) return <div className="et-muted">{empty}</div>;
+  return <pre className="et-json">{JSON.stringify(value, null, 2)}</pre>;
+};
+
+export function EasyTierPanel() {
+  const api = useEasyTier();
+  const [editor, setEditor] = useState<(Pick<Profile, 'name' | 'toml'> & Partial<Pick<Profile, 'id'>>) | null>(null);
+  const selected = api.state.profiles.find((profile) => profile.id === api.state.selected_profile_id);
+  const running = api.state.process.status === 'running' || api.state.process.status === 'starting' || api.state.process.status === 'restart_wait';
+
+  const openProfile = async (profile: ProfileSummary) => {
+    const full = await api.getProfile(profile.id);
+    if (full) setEditor(full);
+  };
+  const saveProfile = async (profile: { id?: string; name: string; toml: string }) => {
+    const result = await api.saveProfile(profile);
+    if (!result) return;
+    setEditor(null);
+    if (result.restart_required) {
+      showModal(<ConfirmModal strTitle="配置已保存" strDescription="当前连接仍在使用旧配置。是否立即重启 EasyTier？" strOKButtonText="立即重启" strCancelButtonText="稍后" onOK={() => api.restart()} />);
+    }
+  };
+  const duplicate = async (profile: ProfileSummary) => {
+    const full = await api.getProfile(profile.id);
+    if (full) setEditor({ name: `${full.name} 副本`, toml: full.toml });
+  };
+  const remove = (profile: ProfileSummary) => showModal(
+    <ConfirmModal bDestructiveWarning strTitle="删除配置档案" strDescription={`确定删除“${profile.name}”？`} strOKButtonText="删除" onOK={() => api.deleteProfile(profile.id)} />,
+  );
+
+  if (editor) return <ProfileEditor profile={editor} busy={api.busy} onCancel={() => setEditor(null)} onSave={saveProfile} />;
+
+  return (
+    <>
+      <PanelSection title="运行状态">
+        <Field label="EasyTier Core">{LABELS[api.state.process.status] || api.state.process.status}</Field>
+        <Field label="版本">{api.state.binary_version}</Field>
+        <Field label="当前档案">{selected?.name || '未选择'}</Field>
+        {api.state.process.pid && <Field label="PID">{api.state.process.pid}</Field>}
+        {api.state.process.restart_attempt > 0 && <Field label="重启次数">{api.state.process.restart_attempt}</Field>}
+        {api.state.process.error && <div className="et-error">{api.state.process.error}</div>}
+        {api.runtime?.cli_error && <div className="et-warning">管理接口暂不可用：{api.runtime.cli_error}</div>}
+        <PanelSectionRow>
+          {api.busy ? <Spinner /> : running ? (
+            <ButtonItem layout="below" onClick={api.stop}><FaStop /> 停止 EasyTier</ButtonItem>
+          ) : (
+            <ButtonItem layout="below" disabled={!selected} onClick={() => selected && api.startProfile(selected.id)}><FaPlay /> 启动所选档案</ButtonItem>
+          )}
+        </PanelSectionRow>
+        {api.state.restart_required && <PanelSectionRow><ButtonItem layout="below" onClick={api.restart}>应用配置并重启</ButtonItem></PanelSectionRow>}
+      </PanelSection>
+
+      {running && <>
+        <PanelSection title="本机"><JsonView value={api.runtime?.node} empty="RPC 正在就绪…" /></PanelSection>
+        <PanelSection title="节点"><JsonView value={api.runtime?.peers} empty="尚未发现节点" /></PanelSection>
+        <PanelSection title="路由"><JsonView value={api.runtime?.routes} empty="暂无路由" /></PanelSection>
+        <PanelSection title="最近日志"><pre className="et-log">{api.runtime?.logs.join('\n') || '暂无日志'}</pre></PanelSection>
+      </>}
+
+      <PanelSection title="配置档案">
+        {!api.state.profiles.length && <div className="et-muted">还没有配置档案。</div>}
+        {api.state.profiles.map((profile) => (
+          <div className={`et-profile ${profile.id === api.state.selected_profile_id ? 'selected' : ''}`} key={profile.id}>
+            <ButtonItem layout="below" disabled={running && profile.id !== api.state.process.profile_id} onClick={() => api.selectProfile(profile.id)}>{profile.id === api.state.selected_profile_id ? '● ' : '○ '}{profile.name}</ButtonItem>
+            <div className="et-actions">
+              <button onClick={() => openProfile(profile)} title="编辑"><FaEdit /></button>
+              <button onClick={() => duplicate(profile)} title="复制"><FaCopy /></button>
+              <button disabled={running && profile.id === api.state.process.profile_id} onClick={() => remove(profile)} title="删除"><FaTrash /></button>
+            </div>
+          </div>
+        ))}
+        <PanelSectionRow><ButtonItem layout="below" onClick={() => setEditor({ name: `网络 ${api.state.profiles.length + 1}`, toml: defaultProfileToml() })}><FaPlus /> 新建档案</ButtonItem></PanelSectionRow>
+      </PanelSection>
+
+      <PanelSection title="插件设置">
+        <ToggleField label="Decky 加载时自动启动" checked={api.state.settings.auto_start} onChange={(value) => api.saveSettings({ ...api.state.settings, auto_start: value })} />
+        <ToggleField label="Core 崩溃后自动重启" checked={api.state.settings.auto_restart_core} onChange={(value) => api.saveSettings({ ...api.state.settings, auto_restart_core: value })} />
+      </PanelSection>
+      {api.error && <div className="et-error" onClick={() => api.setError(null)}>{api.error}<div className="et-muted">点击关闭</div></div>}
+    </>
+  );
+}

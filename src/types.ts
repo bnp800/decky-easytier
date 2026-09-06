@@ -1,32 +1,17 @@
-/**
- * TypeScript 类型定义 - Decky EasyTier
- */
-
-// 进程状态
-export type ProcessStatus = 'stopped' | 'running' | 'crashed' | 'error';
-
-// 总体状态
-export type OverallStatus = 'uninstalled' | 'stopped' | 'running' | 'partial' | 'error';
-
-// 组合状态（后端返回）
-export interface CombinedStatus {
-  overall: OverallStatus;
-  web_status?: ProcessStatus;
-  core_status?: ProcessStatus;
-  ip?: string;
-  installed_version?: string;
-  error?: string;
-}
-
-// 更新检查结果
-export interface UpdateInfo {
-  installed_version?: string;
-  latest_version?: string;
-  update_available: boolean;
-}
-
-// 安装进度
-export interface InstallProgress {
-  percent: number;
-  message: string;
+export type ProcessStatus = 'stopped' | 'starting' | 'running' | 'stopping' | 'restart_wait' | 'crashed' | 'error';
+export interface ApiError { code: string; message: string; details?: string }
+export interface ApiResponse<T = unknown> { success: boolean; data?: T; error?: ApiError }
+export interface PluginSettings { auto_start: boolean; auto_restart_core: boolean }
+export interface ProfileSummary { id: string; name: string; created_at: string; updated_at: string }
+export interface Profile extends ProfileSummary { toml: string }
+export interface ProcessState { status: ProcessStatus; profile_id: string | null; pid: number | null; restart_attempt: number; error: string | null }
+export interface PluginState { schema_version: number; binary_version: string; settings: PluginSettings; profiles: ProfileSummary[]; selected_profile_id: string | null; process: ProcessState; restart_required: boolean }
+export interface RuntimeSnapshot { process: ProcessState; node: unknown; peers: unknown[]; routes: unknown[]; logs: string[]; cli_error: string | null }
+export interface SaveProfileResult { profile: ProfileSummary; restart_required: boolean }
+export interface CommonProfileFields {
+  hostname: string; networkName: string; networkSecret: string;
+  addressMode: 'dhcp' | 'static'; ipv4: string;
+  peers: string; listeners: string; proxyNetworks: string; exitNodes: string;
+  encryption: boolean; ipv6: boolean; privateMode: boolean; latencyFirst: boolean;
+  disableUpnp: boolean; udpBroadcastRelay: boolean;
 }

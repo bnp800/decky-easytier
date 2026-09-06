@@ -5,7 +5,7 @@
   "api_version": 1,
   "publish": {
     "tags": ["network", "vpn", "easytier", "steam-deck"],
-    "description": "EasyTier VPN manager for Steam Deck. Downloads and manages easytier-web and easytier-core binaries, provides Web console access for VPN configuration.",
+    "description": "Native EasyTier profiles, process control, peers, routes and logs for Steam Deck.",
     "image": "https://opengraph.githubassets.com/1/EasyTier/EasyTier"
   }
 }

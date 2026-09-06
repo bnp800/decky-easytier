@@ -1,219 +1,130 @@
-#!/usr/bin/env python3
-"""
-Backend Test Suite for Decky EasyTier Plugin
-Tests key functionality without requiring the full Decky environment
-"""
-
-import sys
-import os
 import asyncio
+import json
+import os
+import stat
+import sys
 import tempfile
-import shutil
+import unittest
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
-# Add current directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-# Mock decky module before importing main
-sys.modules['decky'] = Mock()
-sys.modules['decky'].plugin = Mock()
-sys.modules['decky'].plugin.HOME = os.path.expanduser("~")
-
+decky = SimpleNamespace(
+    DECKY_PLUGIN_SETTINGS_DIR="/tmp/settings",
+    DECKY_PLUGIN_RUNTIME_DIR="/tmp/runtime",
+    DECKY_PLUGIN_LOG_DIR="/tmp/logs",
+    DECKY_PLUGIN_DIR="/tmp/plugin",
+    logger=Mock(),
+)
+sys.modules.setdefault("decky", decky)
 import main
 
-class TestDualProcessManager:
-    """Test DualProcessManager functionality"""
-
-    def test_initialization(self):
-        """Test manager initialization"""
-        manager = main.DualProcessManager("/fake/path")
-        assert manager.install_path == Path("/fake/path")
-        assert manager.web_process is None
-        assert manager.core_process is None
-        assert manager.monitor_task is None
-        print("✓ DualProcessManager initialization test passed")
-
-    def test_binary_paths(self):
-        """Test binary path resolution"""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create fake binary files
-            web_path = Path(tmpdir) / "easytier-web"
-            core_path = Path(tmpdir) / "easytier-core"
-            web_path.touch(mode=0o755)
-            core_path.touch(mode=0o755)
-
-            manager = main.DualProcessManager(tmpdir)
-            paths = manager.get_binary_paths()
-
-            assert paths["web"] == web_path
-            assert paths["core"] == core_path
-            print("✓ Binary path resolution test passed")
-
-    def test_status_check(self):
-        """Test process status checking"""
-        manager = main.DualProcessManager("/fake/path")
-
-        # Test with no processes
-        status = manager.get_both_status()
-        assert status["web"]["running"] is False
-        assert status["core"]["running"] is False
-
-        # Test with mock running processes
-        mock_process = Mock()
-        mock_process.returncode = None
-        manager.web_process = mock_process
-        manager.core_process = mock_process
-
-        status = manager.get_both_status()
-        assert status["web"]["running"] is True
-        assert status["core"]["running"] is True
-        print("✓ Process status check test passed")
+VALID_TOML = 'hostname = "deck"\ndhcp = true\n[network_identity]\nnetwork_name = "test"\nnetwork_secret = "secret-value"\n'
 
 
-class TestEasyTierManager:
-    """Test EasyTierManager functionality"""
+class RepositoryTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        root = Path(self.temp.name)
+        self.settings, self.runtime = root / "settings", root / "runtime"
+        self.settings.mkdir(); self.runtime.mkdir()
+        self.repo = main.ProfileRepository(self.settings, self.runtime)
+        self.repo.initialize()
 
-    def test_initialization(self):
-        """Test manager initialization"""
-        test_settings = {"test": "value"}
-        manager = main.EasyTierManager(test_settings)
-        assert manager.settings == test_settings
-        assert manager.process_manager is not None
-        print("✓ EasyTierManager initialization test passed")
+    def tearDown(self): self.temp.cleanup()
 
-    @patch('main.EasyTierManager.get_local_ip')
-    def test_get_combined_status(self, mock_ip):
-        """Test combined status reporting"""
-        mock_ip.return_value = "192.168.1.100"
+    def test_crud_selection_and_permissions(self):
+        first = self.repo.save_profile("Home", VALID_TOML)
+        second = self.repo.save_profile("Travel", VALID_TOML.replace("test", "travel"))
+        self.assertEqual(self.repo.state["selected_profile_id"], first["id"])
+        self.repo.select_profile(second["id"])
+        self.assertEqual(self.repo.get_profile(second["id"])["name"], "Travel")
+        self.assertEqual(stat.S_IMODE(self.repo.profile_path(first["id"]).stat().st_mode), 0o600)
+        with self.assertRaises(ValueError): self.repo.save_profile("home", VALID_TOML)
+        self.assertTrue(self.repo.delete_profile(second["id"]))
 
-        manager = main.EasyTierManager({})
+    def test_legacy_reset(self):
+        legacy = self.runtime / "easytier"; legacy.mkdir(); (legacy / "easytier-web").write_text("old")
+        (self.settings / "config.json").write_text("{}")
+        self.repo.state_path.write_text(json.dumps({"schema_version": 1}))
+        self.repo.initialize()
+        self.assertFalse(legacy.exists())
+        self.assertFalse((self.settings / "config.json").exists())
+        self.assertEqual(self.repo.state["schema_version"], 2)
 
-        # Mock process manager status
-        manager.process_manager.get_both_status = Mock(return_value={
-            "web": {"running": True, "pid": 1234},
-            "core": {"running": True, "pid": 5678}
-        })
+    def test_log_redaction_and_limit(self):
+        log = main.RotatingLog(Path(self.temp.name) / "logs")
+        log.write("secret-value connected", ["secret-value"])
+        self.assertEqual(log.tail(999), ["<redacted> connected"])
 
-        status = manager.get_combined_status()
-
-        assert status["overall"] == "running"
-        assert status["web_status"]["running"] is True
-        assert status["core_status"]["running"] is True
-        assert status["ip"] == "192.168.1.100"
-        print("✓ Combined status test passed")
-
-    def test_get_local_ip(self):
-        """Test IP address detection"""
-        manager = main.EasyTierManager({})
-        ip = manager.get_local_ip()
-
-        # Should return a valid IP or fallback
-        assert ip is not None
-        assert isinstance(ip, str)
-        # Basic IP format validation (loose)
-        parts = ip.split('.')
-        assert len(parts) == 4
-        print(f"✓ IP detection test passed (IP: {ip})")
-
-    def test_config_file_paths(self):
-        """Test configuration file path generation"""
-        manager = main.EasyTierManager({"test": "value"})
-
-        paths = manager.get_config_file_paths()
-
-        assert "settings" in paths
-        assert "easytier" in paths
-        assert paths["settings"].name == "settings.json"
-        assert paths["easytier"].name == "easytier"
-        print("✓ Config file paths test passed")
-
-    def test_plugin_settings_io(self):
-        """Test plugin settings save/load"""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Mock the config dir
-            config_dir = Path(tmpdir) / "config"
-            config_dir.mkdir()
-
-            manager = main.EasyTierManager({})
-            manager.get_config_file_paths = Mock(return_value={
-                "settings": config_dir / "settings.json"
-            })
-
-            # Test save
-            test_settings = {
-                "auto_start": True,
-                "log_level": "debug",
-                "auto_restart_core": False
-            }
-            result = manager.save_plugin_settings(test_settings)
-            assert result["success"] is True
-
-            # Test load
-            loaded = manager.load_plugin_settings()
-            assert loaded["success"] is True
-            assert loaded["data"] == test_settings
-            print("✓ Plugin settings I/O test passed")
+    def test_log_rotation(self):
+        log = main.RotatingLog(Path(self.temp.name) / "rotating")
+        with patch.object(main, "MAX_LOG_BYTES", 5):
+            log.write("first")
+            log.write("second")
+        self.assertTrue((log.dir / "easytier.log.1").exists())
 
 
-async def run_async_tests():
-    """Run async tests"""
-    print("\n=== Running Async Tests ===")
+class ProcessTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.temp = tempfile.TemporaryDirectory(); root = Path(self.temp.name)
+        for name in ("settings", "runtime", "logs", "plugin/bin"): (root / name).mkdir(parents=True)
+        self.root = root
+        self.repo = main.ProfileRepository(root / "settings", root / "runtime"); self.repo.initialize()
+        self.profile = self.repo.save_profile("Test", VALID_TOML)
+        core = root / "plugin/bin/easytier-core"; cli = root / "plugin/bin/easytier-cli"
+        core.write_text("#!/bin/sh\ncase \"$1\" in --check-config) grep -q INVALID \"$3\" && exit 2; exit 0;; esac\ntrap 'exit 0' TERM\necho 'secret-value connected'\nwhile :; do sleep 1; done\n")
+        cli.write_text("#!/bin/sh\ncase \"$5\" in node) echo '{\"virtual_ip\":\"10.1.1.1\"}';; peer) echo '[{\"hostname\":\"peer\"}]';; route) echo '[{\"ipv4\":\"10.1.1.2\"}]';; esac\n")
+        core.chmod(0o755); cli.chmod(0o755)
+        self.manager = main.EasyTierProcessManager(core, cli, self.repo, main.RotatingLog(root / "logs"))
 
-    # Test async subprocess operations (mocked)
-    manager = main.DualProcessManager("/fake/path")
+    async def asyncTearDown(self):
+        await self.manager.stop(); self.temp.cleanup()
 
-    # Mock asyncio.create_subprocess_exec
-    with patch('asyncio.create_subprocess_exec') as mock_exec:
-        mock_process = Mock()
-        mock_process.returncode = None
-        mock_process.wait = Mock(return_value=asyncio.sleep(0))
-        mock_process.terminate = Mock()
-        mock_process.kill = Mock()
+    async def test_validation_start_query_stop(self):
+        self.assertTrue((await self.manager.validate(VALID_TOML))["success"])
+        self.assertFalse((await self.manager.validate("INVALID"))["success"])
+        self.assertTrue((await self.manager.start(self.profile["id"]))["success"])
+        await asyncio.sleep(0.05)
+        self.assertEqual((await self.manager.query("node"))["virtual_ip"], "10.1.1.1")
+        self.assertIn("<redacted>", "\n".join(self.manager.log.tail(20)))
+        await self.manager.stop()
+        self.assertEqual(self.manager.state.status, "stopped")
 
-        mock_exec.return_value = asyncio.Future()
-        mock_exec.return_value.set_result(mock_process)
+    async def test_only_one_profile_runs(self):
+        other = self.repo.save_profile("Other", VALID_TOML)
+        await self.manager.start(self.profile["id"])
+        result = await self.manager.start(other["id"])
+        self.assertEqual(result["error"]["code"], "ALREADY_RUNNING")
 
-        try:
-            # This would normally start the process, but we're just testing the call
-            print("✓ Async subprocess operations can be called (mocked)")
-        except:
-            pass
+    async def test_malformed_cli_output(self):
+        await self.manager.start(self.profile["id"])
+        self.manager.cli.write_text("#!/bin/sh\necho not-json\n")
+        self.manager.cli.chmod(0o755)
+        with self.assertRaises(json.JSONDecodeError):
+            await self.manager.query("node")
+
+    async def test_stop_escalates_when_term_is_ignored(self):
+        await self.manager.stop()
+        self.manager.core.write_text("#!/bin/sh\n[ \"$1\" = --check-config ] && exit 0\ntrap '' TERM\nwhile :; do sleep 1; done\n")
+        self.manager.core.chmod(0o755)
+        await self.manager.start(self.profile["id"])
+        with patch.object(main, "STOP_TIMEOUT", 0.05):
+            result = await self.manager.stop()
+        self.assertTrue(result["success"])
+        self.assertEqual(self.manager.state.status, "stopped")
+
+    async def test_restart_limit(self):
+        await self.manager.stop()
+        self.manager.core.write_text("#!/bin/sh\n[ \"$1\" = --check-config ] && exit 0\nexit 9\n")
+        self.manager.core.chmod(0o755)
+        with patch.object(main, "RESTART_DELAYS", (0, 0, 0, 0, 0, 0)):
+            await self.manager.start(self.profile["id"])
+            for _ in range(100):
+                if self.manager.state.status == "error": break
+                await asyncio.sleep(0.01)
+        self.assertEqual(self.manager.state.status, "error")
+        self.assertIn("5 failures", self.manager.state.error)
 
 
-def run_tests():
-    """Run all tests"""
-    print("=" * 60)
-    print("Decky EasyTier Backend Test Suite")
-    print("=" * 60)
-
-    # Run synchronous tests
-    test_manager = TestDualProcessManager()
-    test_manager.test_initialization()
-    test_manager.test_binary_paths()
-    test_manager.test_status_check()
-
-    test_easymanager = TestEasyTierManager()
-    test_easymanager.test_initialization()
-    test_easymanager.test_get_combined_status()
-    test_easymanager.test_get_local_ip()
-    test_easymanager.test_config_file_paths()
-    test_easymanager.test_plugin_settings_io()
-
-    # Run async tests
-    asyncio.run(run_async_tests())
-
-    print("\n" + "=" * 60)
-    print("All backend tests completed successfully! ✓")
-    print("=" * 60)
-
-
-if __name__ == "__main__":
-    try:
-        run_tests()
-        sys.exit(0)
-    except Exception as e:
-        print(f"\n❌ Test failed: {e}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+if __name__ == "__main__": unittest.main()
