@@ -12,7 +12,10 @@
     "watch": "rollup -c -w",
     "deploy": "pnpm run build && decky plugin install"
   },
-  "repository": { "type": "git", "url": "git+https://github.com/bnp800/decky-easytier.git" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bnp800/decky-easytier.git"
+  },
   "author": "Decky EasyTier Contributors",
   "license": "GPL-3.0",
   "devDependencies": {
@@ -23,7 +26,6 @@
     "@rollup/plugin-node-resolve": "^16.0.3",
     "@rollup/plugin-replace": "^6.0.3",
     "@rollup/plugin-typescript": "^12.3.0",
-    "@types/iarna__toml": "^2.0.5",
     "@types/react": "19.1.1",
     "@types/react-dom": "19.1.1",
     "@types/webpack": "^5.28.5",
@@ -33,8 +35,8 @@
   },
   "dependencies": {
     "@decky/api": "^1.1.3",
-    "@iarna/toml": "^2.2.5",
     "react-icons": "^5.3.0",
+    "smol-toml": "^1.8.0",
     "tslib": "^2.7.0"
   }
 }

@@ -1,11 +1,11 @@
-import * as TOML from '@iarna/toml';
+import { parse, stringify } from 'smol-toml';
 import { CommonProfileFields } from './types';
 
 type TomlObject = Record<string, any>;
 const PUBLIC_PEER = 'tcp://public.easytier.top:11010';
 const lines = (value: string) => value.split(/[,\n]/).map((item) => item.trim()).filter(Boolean);
 
-export const defaultProfileToml = (): string => TOML.stringify({
+export const defaultProfileToml = (): string => stringify({
   hostname: 'steamdeck',
   dhcp: true,
   listeners: ['tcp://0.0.0.0:11010', 'udp://0.0.0.0:11010'],
@@ -15,7 +15,7 @@ export const defaultProfileToml = (): string => TOML.stringify({
 } as any);
 
 export function readCommonFields(source: string): CommonProfileFields {
-  const value = TOML.parse(source) as TomlObject;
+  const value = parse(source) as TomlObject;
   const flags = (value.flags || {}) as TomlObject;
   return {
     hostname: String(value.hostname || 'steamdeck'),
@@ -37,7 +37,7 @@ export function readCommonFields(source: string): CommonProfileFields {
 }
 
 export function writeCommonFields(source: string, fields: CommonProfileFields): string {
-  const value = TOML.parse(source) as TomlObject;
+  const value = parse(source) as TomlObject;
   value.hostname = fields.hostname.trim();
   value.dhcp = fields.addressMode === 'dhcp';
   if (value.dhcp) delete value.ipv4; else value.ipv4 = fields.ipv4.trim();
@@ -58,5 +58,5 @@ export function writeCommonFields(source: string, fields: CommonProfileFields): 
     disable_upnp: fields.disableUpnp,
     enable_udp_broadcast_relay: fields.udpBroadcastRelay,
   };
-  return TOML.stringify(value as any);
+  return stringify(value as any);
 }
