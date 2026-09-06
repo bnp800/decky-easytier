@@ -28,3 +28,18 @@ test('proxy mapping and list fields are normalized', () => {
   assert.equal(parsed.proxy_network[0].mapped_cidr, '10.50.0.0/24');
   assert.equal(parsed.peer.length, 2);
 });
+
+test('common switches round trip through the flags table', () => {
+  const fields = readCommonFields(defaultProfileToml());
+  fields.noTun = true;
+  fields.acceptDns = true;
+  fields.enableExitNode = true;
+  fields.disableUdpHolePunching = true;
+  fields.relayAllPeerRpc = true;
+  const parsed: any = parse(writeCommonFields(defaultProfileToml(), fields));
+  assert.equal(parsed.flags.no_tun, true);
+  assert.equal(parsed.flags.accept_dns, true);
+  assert.equal(parsed.flags.enable_exit_node, true);
+  assert.equal(parsed.flags.disable_udp_hole_punching, true);
+  assert.equal(parsed.flags.relay_all_peer_rpc, true);
+});

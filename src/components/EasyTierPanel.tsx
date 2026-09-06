@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ButtonItem, ConfirmModal, Field, PanelSection, PanelSectionRow, Spinner, ToggleField, showModal } from '@decky/ui';
+import { Button, ButtonItem, ConfirmModal, Field, PanelSection, PanelSectionRow, Spinner, ToggleField, showModal } from '@decky/ui';
 import { FaCopy, FaEdit, FaPlay, FaPlus, FaStop, FaTrash } from 'react-icons/fa';
 import { defaultProfileToml } from '../profileToml';
 import { Profile, ProfileSummary } from '../types';
@@ -78,9 +78,9 @@ export function EasyTierPanel() {
           <div className={`et-profile ${profile.id === api.state.selected_profile_id ? 'selected' : ''}`} key={profile.id}>
             <ButtonItem layout="below" disabled={running && profile.id !== api.state.process.profile_id} onClick={() => api.selectProfile(profile.id)}>{profile.id === api.state.selected_profile_id ? '● ' : '○ '}{profile.name}</ButtonItem>
             <div className="et-actions">
-              <button onClick={() => openProfile(profile)} title="编辑"><FaEdit /></button>
-              <button onClick={() => duplicate(profile)} title="复制"><FaCopy /></button>
-              <button disabled={running && profile.id === api.state.process.profile_id} onClick={() => remove(profile)} title="删除"><FaTrash /></button>
+              <Button onClick={() => openProfile(profile)}><FaEdit /> 编辑</Button>
+              <Button onClick={() => duplicate(profile)}><FaCopy /> 复制</Button>
+              <Button disabled={running && profile.id === api.state.process.profile_id} onClick={() => remove(profile)}><FaTrash /> 删除</Button>
             </div>
           </div>
         ))}

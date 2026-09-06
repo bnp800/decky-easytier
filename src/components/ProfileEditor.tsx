@@ -10,10 +10,10 @@ interface Props {
   onSave: (profile: { id?: string; name: string; toml: string }) => Promise<void>;
 }
 
-const TextArea = ({ label, value, onChange, password = false }: { label: string; value: string; onChange: (value: string) => void; password?: boolean }) => (
+const TextArea = ({ label, value, onChange, password = false, multiline = false }: { label: string; value: string; onChange: (value: string) => void; password?: boolean; multiline?: boolean }) => (
   <PanelSectionRow>
     <div className="et-label">{label}</div>
-    {value.includes('\n') ? (
+    {multiline || value.includes('\n') ? (
       <textarea className="et-textarea" value={value} onChange={(event) => onChange(event.currentTarget.value)} />
     ) : (
       <TextField value={value} bIsPassword={password} onChange={(event) => onChange(event.currentTarget.value)} />
@@ -65,10 +65,10 @@ export function ProfileEditor({ profile, busy, onCancel, onSave }: Props) {
             <TextArea label="网络密钥" value={fields.networkSecret} password onChange={(v) => update('networkSecret', v)} />
             <DropdownItem label="地址模式" selectedOption={fields.addressMode} rgOptions={[{ data: 'dhcp', label: 'DHCP' }, { data: 'static', label: '静态 IPv4' }]} onChange={(item) => update('addressMode', item.data)} />
             {fields.addressMode === 'static' && <TextArea label="虚拟 IPv4/CIDR" value={fields.ipv4} onChange={(v) => update('ipv4', v)} />}
-            <TextArea label="初始节点（每行一个）" value={fields.peers} onChange={(v) => update('peers', v)} />
-            <TextArea label="监听器（每行一个）" value={fields.listeners} onChange={(v) => update('listeners', v)} />
-            <TextArea label="子网代理（每行一个）" value={fields.proxyNetworks} onChange={(v) => update('proxyNetworks', v)} />
-            <TextArea label="出口节点 IP（每行一个）" value={fields.exitNodes} onChange={(v) => update('exitNodes', v)} />
+            <TextArea multiline label="初始节点（每行一个）" value={fields.peers} onChange={(v) => update('peers', v)} />
+            <TextArea multiline label="监听器（每行一个）" value={fields.listeners} onChange={(v) => update('listeners', v)} />
+            <TextArea multiline label="子网代理（每行一个）" value={fields.proxyNetworks} onChange={(v) => update('proxyNetworks', v)} />
+            <TextArea multiline label="出口节点 IP（每行一个）" value={fields.exitNodes} onChange={(v) => update('exitNodes', v)} />
           </PanelSection>
           <PanelSection title="常用开关">
             <ToggleField label="传输加密" checked={fields.encryption} onChange={(v) => update('encryption', v)} />
@@ -77,6 +77,22 @@ export function ProfileEditor({ profile, busy, onCancel, onSave }: Props) {
             <ToggleField label="延迟优先" checked={fields.latencyFirst} onChange={(v) => update('latencyFirst', v)} />
             <ToggleField label="禁用 UPnP" checked={fields.disableUpnp} onChange={(v) => update('disableUpnp', v)} />
             <ToggleField label="UDP 广播中继" checked={fields.udpBroadcastRelay} onChange={(v) => update('udpBroadcastRelay', v)} />
+            <ToggleField label="无 TUN 模式" description="不创建虚拟网卡" checked={fields.noTun} onChange={(v) => update('noTun', v)} />
+            <ToggleField label="用户态网络栈" description="使用 smoltcp" checked={fields.useSmoltcp} onChange={(v) => update('useSmoltcp', v)} />
+            <ToggleField label="禁用 P2P" checked={fields.disableP2p} onChange={(v) => update('disableP2p', v)} />
+            <ToggleField label="仅允许 P2P" checked={fields.p2pOnly} onChange={(v) => update('p2pOnly', v)} />
+            <ToggleField label="按需建立 P2P" checked={fields.lazyP2p} onChange={(v) => update('lazyP2p', v)} />
+            <ToggleField label="强制需要 P2P" checked={fields.needP2p} onChange={(v) => update('needP2p', v)} />
+            <ToggleField label="允许作为出口节点" checked={fields.enableExitNode} onChange={(v) => update('enableExitNode', v)} />
+            <ToggleField label="接受 Magic DNS" checked={fields.acceptDns} onChange={(v) => update('acceptDns', v)} />
+            <ToggleField label="使用系统转发子网代理" checked={fields.proxyForwardBySystem} onChange={(v) => update('proxyForwardBySystem', v)} />
+            <ToggleField label="禁用 TCP 打洞" checked={fields.disableTcpHolePunching} onChange={(v) => update('disableTcpHolePunching', v)} />
+            <ToggleField label="禁用 UDP 打洞" checked={fields.disableUdpHolePunching} onChange={(v) => update('disableUdpHolePunching', v)} />
+            <ToggleField label="禁用对称 NAT 打洞" checked={fields.disableSymHolePunching} onChange={(v) => update('disableSymHolePunching', v)} />
+            <ToggleField label="多线程运行" checked={fields.multiThread} onChange={(v) => update('multiThread', v)} />
+            <ToggleField label="监听器绑定设备" checked={fields.bindDevice} onChange={(v) => update('bindDevice', v)} />
+            <ToggleField label="禁止转发中继数据" checked={fields.disableRelayData} onChange={(v) => update('disableRelayData', v)} />
+            <ToggleField label="转发所有节点 RPC" checked={fields.relayAllPeerRpc} onChange={(v) => update('relayAllPeerRpc', v)} />
           </PanelSection>
         </>
       )}

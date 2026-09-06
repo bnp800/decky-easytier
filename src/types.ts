@@ -13,5 +13,9 @@ export interface CommonProfileFields {
   addressMode: 'dhcp' | 'static'; ipv4: string;
   peers: string; listeners: string; proxyNetworks: string; exitNodes: string;
   encryption: boolean; ipv6: boolean; privateMode: boolean; latencyFirst: boolean;
-  disableUpnp: boolean; udpBroadcastRelay: boolean;
+  disableUpnp: boolean; udpBroadcastRelay: boolean; noTun: boolean; useSmoltcp: boolean;
+  disableP2p: boolean; p2pOnly: boolean; lazyP2p: boolean; needP2p: boolean;
+  enableExitNode: boolean; acceptDns: boolean; proxyForwardBySystem: boolean;
+  disableTcpHolePunching: boolean; disableUdpHolePunching: boolean; disableSymHolePunching: boolean;
+  multiThread: boolean; bindDevice: boolean; disableRelayData: boolean; relayAllPeerRpc: boolean;
 }
