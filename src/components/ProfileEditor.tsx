@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { ButtonItem, DropdownItem, PanelSection, PanelSectionRow, TextField, ToggleField } from '@decky/ui';
+import { useMemo, useRef, useState } from 'react';
+import { Button, ButtonItem, DropdownItem, Focusable, PanelSection, PanelSectionRow, TextField, ToggleField } from '@decky/ui';
 import { CommonProfileFields, Profile } from '../types';
 import { readCommonFields, writeCommonFields } from '../profileToml';
 
@@ -10,16 +10,31 @@ interface Props {
   onSave: (profile: { id?: string; name: string; toml: string }) => Promise<void>;
 }
 
-const TextArea = ({ label, value, onChange, password = false, multiline = false }: { label: string; value: string; onChange: (value: string) => void; password?: boolean; multiline?: boolean }) => (
+const TextInput = ({ label, value, onChange, password = false }: { label: string; value: string; onChange: (value: string) => void; password?: boolean }) => (
   <PanelSectionRow>
-    <div className="et-label">{label}</div>
-    {multiline || value.includes('\n') ? (
-      <textarea className="et-textarea" value={value} onChange={(event) => onChange(event.currentTarget.value)} />
-    ) : (
-      <TextField value={value} bIsPassword={password} onChange={(event) => onChange(event.currentTarget.value)} />
-    )}
+    <TextField label={label} value={value} bIsPassword={password} onChange={(event) => onChange(event.currentTarget.value)} />
   </PanelSectionRow>
 );
+
+const MultiValueInput = ({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) => {
+  const entries = value === '' ? [''] : value.split('\n');
+  const setEntry = (index: number, next: string) => onChange(entries.map((entry, position) => position === index ? next : entry).join('\n'));
+  const removeEntry = (index: number) => onChange(entries.filter((_, position) => position !== index).join('\n'));
+  return (
+    <PanelSectionRow>
+      <div className="et-label">{label}</div>
+      <Focusable className="et-list-editor" flow-children="down">
+        {entries.map((entry, index) => (
+          <Focusable className="et-list-row" flow-children="right" key={index}>
+            <TextField value={entry} onChange={(event) => setEntry(index, event.currentTarget.value)} />
+            <Button focusable onClick={() => removeEntry(index)}>删除</Button>
+          </Focusable>
+        ))}
+        <Button focusable onClick={() => onChange([...entries, ''].join('\n'))}>添加</Button>
+      </Focusable>
+    </PanelSectionRow>
+  );
+};
 
 export function ProfileEditor({ profile, busy, onCancel, onSave }: Props) {
   const initial = useMemo(() => readCommonFields(profile.toml), [profile.toml]);
@@ -27,6 +42,7 @@ export function ProfileEditor({ profile, busy, onCancel, onSave }: Props) {
   const [toml, setToml] = useState(profile.toml);
   const [fields, setFields] = useState<CommonProfileFields>(initial);
   const [rawMode, setRawMode] = useState(false);
+  const tomlArea = useRef<HTMLTextAreaElement>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const update = <K extends keyof CommonProfileFields>(key: K, value: CommonProfileFields[K]) => setFields((old) => ({ ...old, [key]: value }));
 
@@ -48,27 +64,27 @@ export function ProfileEditor({ profile, busy, onCancel, onSave }: Props) {
   return (
     <>
       <PanelSection title="配置档案">
-        <TextArea label="档案名称" value={name} onChange={setName} />
+        <TextInput label="档案名称" value={name} onChange={setName} />
         <PanelSectionRow><ButtonItem layout="below" onClick={toggleMode}>{rawMode ? '返回常用表单' : '编辑完整 TOML'}</ButtonItem></PanelSectionRow>
       </PanelSection>
       {rawMode ? (
         <PanelSection title="高级 TOML">
-          <PanelSectionRow><textarea className="et-toml" value={toml} onChange={(event) => setToml(event.currentTarget.value)} spellCheck={false} /></PanelSectionRow>
+          <PanelSectionRow><Focusable flow-children="down" onActivate={() => tomlArea.current?.focus()}><textarea ref={tomlArea} className="et-toml" value={toml} onChange={(event) => setToml(event.currentTarget.value)} spellCheck={false} /></Focusable></PanelSectionRow>
           <PanelSectionRow><ButtonItem layout="below" onClick={async () => navigator.clipboard.writeText(toml)}>复制 TOML</ButtonItem></PanelSectionRow>
           <PanelSectionRow><ButtonItem layout="below" onClick={async () => setToml(await navigator.clipboard.readText())}>从剪贴板导入</ButtonItem></PanelSectionRow>
         </PanelSection>
       ) : (
         <>
           <PanelSection title="网络">
-            <TextArea label="主机名" value={fields.hostname} onChange={(v) => update('hostname', v)} />
-            <TextArea label="网络名称" value={fields.networkName} onChange={(v) => update('networkName', v)} />
-            <TextArea label="网络密钥" value={fields.networkSecret} password onChange={(v) => update('networkSecret', v)} />
+            <TextInput label="主机名" value={fields.hostname} onChange={(v) => update('hostname', v)} />
+            <TextInput label="网络名称" value={fields.networkName} onChange={(v) => update('networkName', v)} />
+            <TextInput label="网络密钥" value={fields.networkSecret} password onChange={(v) => update('networkSecret', v)} />
             <DropdownItem label="地址模式" selectedOption={fields.addressMode} rgOptions={[{ data: 'dhcp', label: 'DHCP' }, { data: 'static', label: '静态 IPv4' }]} onChange={(item) => update('addressMode', item.data)} />
-            {fields.addressMode === 'static' && <TextArea label="虚拟 IPv4/CIDR" value={fields.ipv4} onChange={(v) => update('ipv4', v)} />}
-            <TextArea multiline label="初始节点（每行一个）" value={fields.peers} onChange={(v) => update('peers', v)} />
-            <TextArea multiline label="监听器（每行一个）" value={fields.listeners} onChange={(v) => update('listeners', v)} />
-            <TextArea multiline label="子网代理（每行一个）" value={fields.proxyNetworks} onChange={(v) => update('proxyNetworks', v)} />
-            <TextArea multiline label="出口节点 IP（每行一个）" value={fields.exitNodes} onChange={(v) => update('exitNodes', v)} />
+            {fields.addressMode === 'static' && <TextInput label="虚拟 IPv4/CIDR" value={fields.ipv4} onChange={(v) => update('ipv4', v)} />}
+            <MultiValueInput label="初始节点" value={fields.peers} onChange={(v) => update('peers', v)} />
+            <MultiValueInput label="监听器" value={fields.listeners} onChange={(v) => update('listeners', v)} />
+            <MultiValueInput label="子网代理" value={fields.proxyNetworks} onChange={(v) => update('proxyNetworks', v)} />
+            <MultiValueInput label="出口节点 IP" value={fields.exitNodes} onChange={(v) => update('exitNodes', v)} />
           </PanelSection>
           <PanelSection title="常用开关">
             <ToggleField label="传输加密" checked={fields.encryption} onChange={(v) => update('encryption', v)} />

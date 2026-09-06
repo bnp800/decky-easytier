@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, ButtonItem, ConfirmModal, Field, PanelSection, PanelSectionRow, Spinner, ToggleField, showModal } from '@decky/ui';
+import { Button, ButtonItem, ConfirmModal, Field, Focusable, PanelSection, PanelSectionRow, Spinner, ToggleField, showModal } from '@decky/ui';
 import { FaCopy, FaEdit, FaPlay, FaPlus, FaStop, FaTrash } from 'react-icons/fa';
 import { defaultProfileToml } from '../profileToml';
 import { Profile, ProfileSummary } from '../types';
@@ -77,11 +77,11 @@ export function EasyTierPanel() {
         {api.state.profiles.map((profile) => (
           <div className={`et-profile ${profile.id === api.state.selected_profile_id ? 'selected' : ''}`} key={profile.id}>
             <ButtonItem layout="below" disabled={running && profile.id !== api.state.process.profile_id} onClick={() => api.selectProfile(profile.id)}>{profile.id === api.state.selected_profile_id ? '● ' : '○ '}{profile.name}</ButtonItem>
-            <div className="et-actions">
-              <Button onClick={() => openProfile(profile)}><FaEdit /> 编辑</Button>
-              <Button onClick={() => duplicate(profile)}><FaCopy /> 复制</Button>
-              <Button disabled={running && profile.id === api.state.process.profile_id} onClick={() => remove(profile)}><FaTrash /> 删除</Button>
-            </div>
+            <Focusable className="et-actions" flow-children="right">
+              <Button focusable onClick={() => openProfile(profile)}><FaEdit /> 编辑</Button>
+              <Button focusable onClick={() => duplicate(profile)}><FaCopy /> 复制</Button>
+              <Button focusable disabled={running && profile.id === api.state.process.profile_id} onClick={() => remove(profile)}><FaTrash /> 删除</Button>
+            </Focusable>
           </div>
         ))}
         <PanelSectionRow><ButtonItem layout="below" onClick={() => setEditor({ name: `网络 ${api.state.profiles.length + 1}`, toml: defaultProfileToml() })}><FaPlus /> 新建档案</ButtonItem></PanelSectionRow>
